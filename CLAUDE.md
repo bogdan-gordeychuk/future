@@ -2,45 +2,90 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project
-AI-powered Telegram booking assistant SaaS for Russian service businesses.
-Owner: Sereja (sereja.tech) — CTO role, approves direction, does NOT implement.
-Claude = full product team. Work autonomously, report progress, ask before big decisions.
+## Проект: VIKA
+AI-powered Telegram-ассистент для онлайн-записи клиентов в малом бизнесе (барбершопы, студии, репетиторы).
+Бизнес записывает токен бота → ВИКА отвечает клиентам в Telegram, записывает, напоминает.
 
-## Communication
-- Always respond in Russian
-- Keep owner updated on task status
-- Flag blockers immediately
-- Before large architectural changes — present plan, wait for approval
+**Репозиторий:** https://github.com/bogdan-gordeychuk/future
+**Supabase:** https://cdhpswltdptbtgmrcaqs.supabase.co
 
-## Workflow
-- Use TaskCreate/TaskUpdate to track all work
-- Commits: conventional commits (feat:, fix:, chore:, docs:)
-- PRs for every feature (even solo — documents what changed and why)
-- Update CLAUDE.md and memory files when architecture or decisions change
+## Роли
+- **Богдан (CTO):** задаёт вектор, одобряет решения, не пишет код
+- **Claude (команда):** PM + архитектор + разработчик + QA. Работает автономно.
 
-## Tech Stack
-- **Framework:** Next.js 15 (App Router)
-- **Database/Auth:** Supabase
-- **Hosting:** Vercel
-- **Telegram:** Bot API + Telegram Web App (TWA/Mini App)
-- **AI:** Claude API (claude-haiku-4-5 for bot, claude-sonnet-4-6 for complex tasks)
-- **Payments:** YooKassa (subscriptions, recurring billing)
-- **Language:** TypeScript throughout
+## Текущий статус (февраль 2026)
+- Sprint 1 в процессе: Next.js 15 инициализирован, схема БД создана и применена в Supabase, репо запушено
+- Sprint 2 следующий: ядро Telegram бота + AI движок
+- Подробный роадмап: `memory/project-booking-saas.md`
 
-## Key Commands
+## Команды
 ```bash
-npm run dev          # local dev server
-npm run build        # production build
-npm run lint         # ESLint
-npm run test         # tests (when configured)
+npm run dev      # dev-сервер на localhost:3000
+npm run build    # production сборка
+npm run lint     # ESLint
 ```
 
-## Architecture (update as project grows)
-TBD — to be filled after architecture phase completes.
+## Стек
+- **Next.js 15** App Router, TypeScript, Tailwind
+- **Supabase** — PostgreSQL (БД + Auth + RLS)
+- **Vercel** — хостинг (не подключён ещё)
+- **GrammY** — Telegram Bot framework (`grammy`)
+- **Claude Haiku** (`claude-haiku-4-5-20251001`) — AI для клиентского бота (дёшево)
+- **Claude Sonnet** — для сложных задач в админ-панели
+- **YooKassa** — платежи и подписки (Sprint 4)
+- **Zod** — валидация
 
-## Business Context
-- Target: Russian SMBs (barbershops, beauty, tutors, photographers)
-- Pricing: 1490₽/month per business
-- Legal: owner is самозанятый (НПД), payments via YooKassa
-- Break-even: ~7 paying clients
+## Архитектура
+```
+src/
+  app/
+    (auth)/          # /login, /register — публичные
+    (dashboard)/     # /dashboard, /services, /bookings... — защищены middleware
+    api/
+      telegram/webhook/  # принимает апдейты от всех ботов (multi-tenant)
+      billing/webhook/   # YooKassa события
+  lib/
+    supabase/
+      client.ts      # браузерный клиент
+      server.ts      # серверный клиент + serviceClient (bypass RLS)
+    telegram/        # логика бота (Sprint 2)
+    ai/              # AI движок, промпты, контекст (Sprint 2)
+    yookassa/        # платежи (Sprint 4)
+  types/
+    database.ts      # TypeScript типы всех таблиц
+  middleware.ts      # защита роутов через Supabase Auth
+supabase/
+  migrations/        # SQL миграции, применять через Supabase SQL Editor
+```
+
+## Мультиарендность
+Каждый бизнес создаёт своего бота через @BotFather и вставляет токен в панель.
+Мы регистрируем webhook на `/api/telegram/webhook`.
+Роутинг: по `telegram_bot_token` находим `business_id` в БД.
+
+## Защита от затрат на AI
+- `subscriptions.messages_limit` и `messages_used` — квота на месяц
+- Rate limit: 10 сообщений/мин с одного `telegram_user_id`
+- После лимита — fallback без AI
+- Hard cap в Anthropic Console: $30/месяц
+
+## БД (ключевые таблицы)
+`businesses` → `services`, `masters`, `clients`, `bookings`, `messages`, `knowledge_items`, `subscriptions`
+Все таблицы с RLS: владелец видит только своё.
+Полная схема: `supabase/migrations/001_initial_schema.sql`
+
+## Git-конвенции
+- `feat:` новая функциональность
+- `fix:` баг
+- `chore:` инфраструктура, зависимости
+- `docs:` документация
+- Каждый PR закрывает GitHub Issue: `closes #N`
+
+## Что НЕ коммитить
+- `.env.local` — секреты (в .gitignore)
+- `.mcp.json` — GitHub токен (в .gitignore)
+
+## Переменные окружения
+Шаблон: `.env.example`. Заполненный: `.env.local` (не в git).
+Ключевые: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `TELEGRAM_WEBHOOK_SECRET`
