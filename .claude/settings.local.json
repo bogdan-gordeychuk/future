@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:sereja.tech)",
+      "WebFetch(domain:vc.ru)",
+      "Bash(git:*)",
+      "Bash(node:*)",
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(cp:*)",
+      "Bash(npm install:*)"
+    ]
+  }
+}
