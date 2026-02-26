@@ -23,3 +23,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_APP_URL: https://example.com
+
+      - name: Auto-merge on success
+        if: success()
+        run: |
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --merge \
+            --subject "$(gh pr view ${{ github.event.pull_request.number }} --json title -q .title)" \
+            --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
