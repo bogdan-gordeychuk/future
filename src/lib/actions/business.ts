@@ -22,8 +22,30 @@ export async function updateBusiness(
       phone: formData.get('phone') as string || null,
       address: formData.get('address') as string || null,
       city: formData.get('city') as string || null,
-      telegram_bot_token: formData.get('telegram_bot_token') as string || null,
+      // telegram_bot_token намеренно не трогаем — отдельный action
     })
+    .eq('owner_id', user.id)
+
+  if (error) return { error: error.message, success: false }
+
+  revalidatePath('/settings')
+  revalidatePath('/dashboard')
+  return { error: null, success: true }
+}
+
+export async function saveBotToken(
+  _prev: { error: string | null; success: boolean },
+  formData: FormData
+): Promise<{ error: string | null; success: boolean }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Не авторизован', success: false }
+
+  const token = (formData.get('telegram_bot_token') as string).trim() || null
+
+  const { error } = await supabase
+    .from('businesses')
+    .update({ telegram_bot_token: token })
     .eq('owner_id', user.id)
 
   if (error) return { error: error.message, success: false }

@@ -30,7 +30,7 @@ export function AddMasterForm() {
                 name="name"
                 required
                 placeholder="Иван Петров"
-                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 placeholder:text-zinc-400"
               />
             </div>
             {state.error && <p className="text-sm text-red-600">{state.error}</p>}

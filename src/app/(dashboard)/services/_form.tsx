@@ -135,7 +135,8 @@ function ServiceFields({
           name="name"
           defaultValue={name}
           required
-          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+          placeholder="Стрижка мужская"
+          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 placeholder:text-zinc-400"
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -147,7 +148,8 @@ function ServiceFields({
             defaultValue={price || ''}
             min={0}
             required
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+            placeholder="1500"
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 placeholder:text-zinc-400"
           />
         </div>
         <div>
@@ -158,7 +160,8 @@ function ServiceFields({
             defaultValue={duration}
             min={5}
             required
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+            placeholder="60"
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 placeholder:text-zinc-400"
           />
         </div>
       </div>
@@ -168,7 +171,8 @@ function ServiceFields({
           type="text"
           name="description"
           defaultValue={description}
-          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+          placeholder="Классическая мужская стрижка ножницами"
+          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 placeholder:text-zinc-400"
         />
       </div>
     </>

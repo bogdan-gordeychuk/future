@@ -1,11 +1,12 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { updateBusiness, connectWebhook } from '@/lib/actions/business'
+import { updateBusiness, saveBotToken, connectWebhook } from '@/lib/actions/business'
 import type { Business } from '@/types/database'
 
 export default function SettingsForm({ business }: { business: Business }) {
-  const [state, action, pending] = useActionState(updateBusiness, { error: null, success: false })
+  const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
+  const [botState, botAction, botPending] = useActionState(saveBotToken, { error: null, success: false })
   const [webhookStatus, setWebhookStatus] = useState<{ msg: string; ok: boolean } | null>(null)
   const [connecting, setConnecting] = useState(false)
 
@@ -19,60 +20,58 @@ export default function SettingsForm({ business }: { business: Business }) {
 
   return (
     <div className="space-y-8">
-      {/* Business info form */}
+      {/* Business info */}
       <div className="rounded-xl bg-white p-6 shadow-sm">
         <h2 className="text-base font-medium text-zinc-900 mb-5">Информация о бизнесе</h2>
-        <form action={action} className="space-y-4">
-          <Field label="Название *" name="name" defaultValue={business.name} required />
-          <Field label="Описание" name="description" defaultValue={business.description ?? ''} />
-          <Field label="Телефон" name="phone" defaultValue={business.phone ?? ''} />
-          <Field label="Адрес" name="address" defaultValue={business.address ?? ''} />
-          <Field label="Город" name="city" defaultValue={business.city ?? ''} />
+        <form action={infoAction} className="space-y-4">
+          <Field label="Название *" name="name" defaultValue={business.name}
+            placeholder="Барбершоп «Стиль»" required />
+          <Field label="Описание" name="description" defaultValue={business.description ?? ''}
+            placeholder="Современный барбершоп в центре города" />
+          <Field label="Телефон" name="phone" defaultValue={business.phone ?? ''}
+            placeholder="+7 (999) 123-45-67" />
+          <Field label="Адрес" name="address" defaultValue={business.address ?? ''}
+            placeholder="ул. Ленина, 10, офис 3" />
+          <Field label="Город" name="city" defaultValue={business.city ?? ''}
+            placeholder="Омск" />
 
-          {state.error && (
-            <p className="text-sm text-red-600">{state.error}</p>
-          )}
-          {state.success && (
-            <p className="text-sm text-green-600">Сохранено</p>
-          )}
+          {infoState.error && <p className="text-sm text-red-600">{infoState.error}</p>}
+          {infoState.success && <p className="text-sm text-green-600">Сохранено</p>}
 
           <button
             type="submit"
-            disabled={pending}
+            disabled={infoPending}
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
-            {pending ? 'Сохранение...' : 'Сохранить'}
+            {infoPending ? 'Сохранение...' : 'Сохранить'}
           </button>
         </form>
       </div>
 
-      {/* Bot token section */}
+      {/* Bot token — отдельная форма, отдельный action */}
       <div className="rounded-xl bg-white p-6 shadow-sm">
         <h2 className="text-base font-medium text-zinc-900 mb-1">Telegram-бот</h2>
         <p className="text-sm text-zinc-500 mb-5">
           Создайте бота через @BotFather, скопируйте токен и нажмите «Подключить».
         </p>
-        <form action={action} className="space-y-4">
+        <form action={botAction} className="space-y-4">
           <Field
             label="Токен бота"
             name="telegram_bot_token"
             defaultValue={business.telegram_bot_token ?? ''}
             placeholder="1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
           />
-          {/* Hidden fields to keep other values unchanged */}
-          <input type="hidden" name="name" value={business.name} />
-          <input type="hidden" name="description" value={business.description ?? ''} />
-          <input type="hidden" name="phone" value={business.phone ?? ''} />
-          <input type="hidden" name="address" value={business.address ?? ''} />
-          <input type="hidden" name="city" value={business.city ?? ''} />
+
+          {botState.error && <p className="text-sm text-red-600">{botState.error}</p>}
+          {botState.success && <p className="text-sm text-green-600">Токен сохранён</p>}
 
           <div className="flex gap-3 flex-wrap">
             <button
               type="submit"
-              disabled={pending}
+              disabled={botPending}
               className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
-              {pending ? 'Сохранение...' : 'Сохранить токен'}
+              {botPending ? 'Сохранение...' : 'Сохранить токен'}
             </button>
             <button
               type="button"
@@ -96,11 +95,7 @@ export default function SettingsForm({ business }: { business: Business }) {
 }
 
 function Field({
-  label,
-  name,
-  defaultValue,
-  required,
-  placeholder,
+  label, name, defaultValue, required, placeholder,
 }: {
   label: string
   name: string
@@ -117,7 +112,7 @@ function Field({
         defaultValue={defaultValue}
         required={required}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+        className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 placeholder:text-zinc-400"
       />
     </div>
   )
