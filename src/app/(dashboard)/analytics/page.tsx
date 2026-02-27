@@ -126,7 +126,7 @@ export default async function AnalyticsPage() {
   // Top masters — group in JS (data is already filtered)
   const masterCountMap: Record<string, number> = {}
   for (const booking of topMastersRaw ?? []) {
-    const mst = booking.masters as { name: string } | null
+    const mst = booking.masters as unknown as { name: string } | null
     const name = mst?.name ?? 'Без мастера'
     masterCountMap[name] = (masterCountMap[name] ?? 0) + 1
   }
