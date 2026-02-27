@@ -22,6 +22,19 @@ export default function RegisterForm() {
         <label className="mb-1 block text-sm font-medium text-zinc-700">Пароль</label>
         <input type="password" name="password" placeholder="Минимум 8 символов" minLength={8} required className={INPUT} />
       </div>
+
+      <label className="flex items-start gap-2 cursor-pointer">
+        <input type="checkbox" name="consent" required
+          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-900 accent-zinc-900 shrink-0" />
+        <span className="text-xs text-zinc-500 leading-relaxed">
+          Я согласен с{' '}
+          <a href="/privacy" target="_blank" className="text-zinc-900 underline hover:no-underline">
+            политикой конфиденциальности
+          </a>{' '}
+          и даю согласие на обработку персональных данных
+        </span>
+      </label>
+
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
       <button
         type="submit"

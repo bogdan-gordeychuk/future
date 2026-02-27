@@ -1,12 +1,12 @@
 'use client'
 
 import { useActionState, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
-  createKnowledgeItem,
-  updateKnowledgeItem,
-  toggleKnowledgeItem,
-  deleteKnowledgeItem,
+  createKnowledgeItem, updateKnowledgeItem,
+  toggleKnowledgeItem, deleteKnowledgeItem,
 } from '@/lib/actions/knowledge'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 import type { KnowledgeItem } from '@/types/database'
 
 const INPUT = 'w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 placeholder:text-zinc-400'
@@ -18,8 +18,9 @@ export function AddKnowledgeForm({ businessId }: { businessId: string }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    if (state.success) setOpen(false)
-  }, [state.success])
+    if (state.success) { toast.success('Вопрос-ответ добавлен'); setOpen(false) }
+    if (state.error) toast.error(state.error)
+  }, [state])
 
   return (
     <div>
@@ -29,14 +30,12 @@ export function AddKnowledgeForm({ businessId }: { businessId: string }) {
           + Добавить вопрос-ответ
         </button>
       )}
-
       {open && (
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-medium text-zinc-900 mb-4">Новый вопрос-ответ</h3>
           <form action={action} className="space-y-3">
             <input type="hidden" name="business_id" value={businessId} />
             <KnowledgeFields />
-            {state.error && <p className="text-sm text-red-600">{state.error}</p>}
             <div className="flex gap-2">
               <button type="submit" disabled={pending}
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
@@ -57,10 +56,22 @@ export function AddKnowledgeForm({ businessId }: { businessId: string }) {
 export function KnowledgeRow({ item, businessId }: { item: KnowledgeItem; businessId: string }) {
   const [editing, setEditing] = useState(false)
   const [state, action, pending] = useActionState(updateKnowledgeItem, INIT)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   useEffect(() => {
-    if (state.success) setEditing(false)
-  }, [state.success])
+    if (state.success) { toast.success('Изменения сохранены'); setEditing(false) }
+    if (state.error) toast.error(state.error)
+  }, [state])
+
+  const handleDelete = async () => {
+    await deleteKnowledgeItem(businessId, item.id)
+    toast.success('Вопрос-ответ удалён')
+  }
+
+  const handleToggle = async () => {
+    await toggleKnowledgeItem(businessId, item.id, item.is_active)
+    toast.success(item.is_active ? 'Скрыто из базы знаний' : 'Добавлено в базу знаний')
+  }
 
   if (editing) {
     return (
@@ -87,32 +98,36 @@ export function KnowledgeRow({ item, businessId }: { item: KnowledgeItem; busine
   }
 
   return (
-    <div className={`rounded-xl bg-white p-5 shadow-sm ${!item.is_active ? 'opacity-50' : ''}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-zinc-900">В: {item.question}</p>
-          <p className="text-sm text-zinc-500 mt-1">О: {item.answer}</p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button onClick={() => setEditing(true)}
-            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50">
-            Изменить
-          </button>
-          <form action={() => toggleKnowledgeItem(businessId, item.id, item.is_active)}>
-            <button type="submit"
+    <>
+      <div className={`rounded-xl bg-white p-5 shadow-sm ${!item.is_active ? 'opacity-50' : ''}`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-zinc-900">В: {item.question}</p>
+            <p className="text-sm text-zinc-500 mt-1">О: {item.answer}</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => setEditing(true)}
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50">
+              Изменить
+            </button>
+            <button type="button" onClick={handleToggle}
               className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50">
               {item.is_active ? 'Скрыть' : 'Показать'}
             </button>
-          </form>
-          <button
-            type="button"
-            onClick={() => { if (confirm('Удалить вопрос?')) deleteKnowledgeItem(businessId, item.id) }}
-            className="rounded-lg border border-red-100 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50">
-            Удалить
-          </button>
+            <button type="button" onClick={() => setConfirmOpen(true)}
+              className="rounded-lg border border-red-100 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50">
+              Удалить
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      <ConfirmModal
+        open={confirmOpen}
+        message="Удалить этот вопрос-ответ из базы знаний? Это действие нельзя отменить."
+        onConfirm={() => { setConfirmOpen(false); handleDelete() }}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
   )
 }
 

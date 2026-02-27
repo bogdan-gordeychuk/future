@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { updateBusiness, saveBotToken, connectWebhook } from '@/lib/actions/business'
 
 const INPUT = 'w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 placeholder:text-zinc-400'
@@ -37,15 +38,24 @@ export default function SettingsForm({
 }: Props) {
   const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
   const [botState, botAction, botPending] = useActionState(saveBotToken, { error: null, success: false })
-  const [webhookStatus, setWebhookStatus] = useState<{ msg: string; ok: boolean } | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [replacing, setReplacing] = useState(false)
 
+  useEffect(() => {
+    if (infoState.success) toast.success('Настройки сохранены')
+    if (infoState.error) toast.error(infoState.error)
+  }, [infoState])
+
+  useEffect(() => {
+    if (botState.success) { toast.success('Токен сохранён'); setReplacing(false) }
+    if (botState.error) toast.error(botState.error)
+  }, [botState])
+
   async function handleConnect() {
     setConnecting(true)
-    setWebhookStatus(null)
     const result = await connectWebhook(businessId)
-    setWebhookStatus({ msg: result.error ?? 'Webhook подключён!', ok: result.ok })
+    if (result.ok) toast.success('Webhook подключён!')
+    else toast.error(result.error ?? 'Ошибка подключения')
     setConnecting(false)
   }
 
@@ -81,9 +91,6 @@ export default function SettingsForm({
             placeholder="123456789 — узнать через @userinfobot"
           />
 
-          {infoState.error && <p className="text-sm text-red-600">{infoState.error}</p>}
-          {infoState.success && <p className="text-sm text-green-600">Сохранено</p>}
-
           <button type="submit" disabled={infoPending}
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
             {infoPending ? 'Сохранение...' : 'Сохранить'}
@@ -114,12 +121,9 @@ export default function SettingsForm({
 
         {/* Token input form — shown when no token or replacing */}
         {(!hasToken || replacing) && (
-          <form action={async (fd) => { await botAction(fd); setReplacing(false) }} className="space-y-4 mb-4">
+          <form action={botAction} className="space-y-4 mb-4">
             <Field label="Токен бота" name="telegram_bot_token" defaultValue=""
               placeholder="1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" />
-
-            {botState.error && <p className="text-sm text-red-600">{botState.error}</p>}
-            {botState.success && <p className="text-sm text-green-600">Токен сохранён</p>}
 
             <div className="flex gap-3 flex-wrap">
               <button type="submit" disabled={botPending}
@@ -143,12 +147,6 @@ export default function SettingsForm({
               {connecting ? 'Подключение...' : 'Подключить webhook'}
             </button>
           </div>
-        )}
-
-        {webhookStatus && (
-          <p className={`mt-3 text-sm ${webhookStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
-            {webhookStatus.msg}
-          </p>
         )}
       </div>
     </div>
