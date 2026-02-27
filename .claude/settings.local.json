@@ -26,7 +26,8 @@
       "mcp__supabase__apply_migration",
       "Bash(curl:*)",
       "mcp__supabase__get_logs",
-      "Bash(env:*)"
+      "Bash(env:*)",
+      "mcp__supabase__list_tables"
     ]
   },
   "enableAllProjectMcpServers": true,

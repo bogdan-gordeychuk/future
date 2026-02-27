@@ -60,7 +60,23 @@ function setupHandlers(bot: Bot, businessId: string) {
 
     if (!business) return
 
-    // Check subscription limits
+    // Check trial / subscription expiry
+    const now = new Date()
+    const trialExpired =
+      business.subscription_status === 'trial' &&
+      new Date(business.trial_ends_at) < now
+    const subExpired =
+      business.subscription_status === 'expired' ||
+      business.subscription_status === 'cancelled'
+
+    if (trialExpired || subExpired) {
+      await ctx.reply(
+        'Доступ к боту временно приостановлен. Пожалуйста, свяжитесь с владельцем.'
+      )
+      return
+    }
+
+    // Check subscription message limits
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('*')
