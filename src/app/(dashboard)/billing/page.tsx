@@ -23,6 +23,7 @@ export default async function BillingPage({
 
   const { payment } = await searchParams
   const paymentSuccess = payment === 'success'
+  const paymentError = payment === 'error'
 
   const now = new Date()
   const trialEnd = new Date(business.trial_ends_at)
@@ -49,6 +50,16 @@ export default async function BillingPage({
         <div className="mb-6 rounded-xl bg-green-50 border border-green-200 p-4">
           <p className="text-sm font-medium text-green-900">Оплата прошла успешно!</p>
           <p className="text-sm text-green-700 mt-0.5">Подписка активирована на 30 дней.</p>
+        </div>
+      )}
+
+      {paymentError && (
+        <div className="mb-6 rounded-xl bg-red-50 border border-red-200 p-4">
+          <p className="text-sm font-medium text-red-900">Не удалось создать платёж</p>
+          <p className="text-sm text-red-700 mt-0.5">
+            Попробуйте ещё раз или напишите нам на{' '}
+            <a href="mailto:comedi4@gmail.com" className="underline">comedi4@gmail.com</a>
+          </p>
         </div>
       )}
 
