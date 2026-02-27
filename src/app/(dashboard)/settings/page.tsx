@@ -10,7 +10,7 @@ export default async function SettingsPage() {
   const business = await getBusiness(user.id)
   if (!business) redirect('/dashboard')
 
-  const settings = business.settings as { notification_telegram_id?: string | null } | null
+  const settings = business.settings as { notification_telegram_id?: string | null; timezone?: string } | null
 
   return (
     <div>
@@ -23,6 +23,7 @@ export default async function SettingsPage() {
         phone={business.phone ?? ''}
         address={business.address ?? ''}
         city={business.city ?? ''}
+        timezone={settings?.timezone ?? ''}
         notificationTelegramId={settings?.notification_telegram_id ?? ''}
         hasToken={!!business.telegram_bot_token}
         maskedToken={business.telegram_bot_token ? maskToken(business.telegram_bot_token) : null}

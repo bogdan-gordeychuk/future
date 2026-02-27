@@ -16,14 +16,19 @@ export async function updateBusiness(
   if (!name) return { error: 'Название обязательно', success: false }
 
   const notifId = (formData.get('notification_telegram_id') as string)?.trim() || null
+  const timezone = (formData.get('timezone') as string)?.trim() || null
 
-  // Merge notification_telegram_id into existing settings JSONB
+  // Merge fields into existing settings JSONB
   const { data: biz } = await supabase
     .from('businesses')
     .select('settings')
     .eq('owner_id', user.id)
     .single()
-  const mergedSettings = { ...(biz?.settings as object ?? {}), notification_telegram_id: notifId }
+  const mergedSettings = {
+    ...(biz?.settings as object ?? {}),
+    notification_telegram_id: notifId,
+    ...(timezone ? { timezone } : {}),
+  }
 
   const { error } = await supabase
     .from('businesses')
