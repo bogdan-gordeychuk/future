@@ -122,34 +122,27 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       reply =
         'К сожалению, лимит сообщений на этот месяц исчерпан. Свяжитесь с нами напрямую.'
     } else {
-      // Load context
-      const [{ data: services }, { data: masters }, { data: knowledgeItems }, { data: history }] =
+      // Load context in parallel (now includes booked slots for next 7 days)
+      const now7d = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
+      const tz = (business.settings as { timezone?: string } | null)?.timezone || 'Europe/Moscow'
+
+      const [{ data: services }, { data: masters }, { data: knowledgeItems }, { data: history }, { data: upcomingBookings }] =
         await Promise.all([
-          supabase
-            .from('services')
-            .select('*')
-            .eq('business_id', business.id)
-            .eq('is_active', true)
-            .order('sort_order'),
-          supabase
-            .from('masters')
-            .select('*')
-            .eq('business_id', business.id)
-            .eq('is_active', true),
-          supabase
-            .from('knowledge_items')
-            .select('*')
-            .eq('business_id', business.id)
-            .eq('is_active', true)
-            .order('sort_order'),
-          supabase
-            .from('messages')
-            .select('*')
-            .eq('business_id', business.id)
-            .eq('client_id', client.id)
-            .order('created_at', { ascending: false })
-            .limit(20),
+          supabase.from('services').select('*').eq('business_id', business.id).eq('is_active', true).order('sort_order'),
+          supabase.from('masters').select('*').eq('business_id', business.id).eq('is_active', true),
+          supabase.from('knowledge_items').select('*').eq('business_id', business.id).eq('is_active', true).order('sort_order'),
+          supabase.from('messages').select('*').eq('business_id', business.id).eq('client_id', client.id).order('created_at', { ascending: false }).limit(20),
+          supabase.from('bookings').select('scheduled_at, services(name)').eq('business_id', business.id).gte('scheduled_at', new Date().toISOString()).lte('scheduled_at', now7d).in('status', ['pending', 'confirmed']),
         ])
+
+      // Format booked slots for AI context
+      const bookedSlots = (upcomingBookings ?? []).map((b) => {
+        const svc = Array.isArray(b.services) ? b.services[0] : b.services
+        const time = new Date(b.scheduled_at).toLocaleString('ru-RU', {
+          weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz,
+        })
+        return `- ${time}${svc?.name ? ` (${svc.name})` : ''}`
+      })
 
       try {
         const result = await processMessage(
@@ -158,27 +151,29 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
             services: (services as Service[]) ?? [],
             masters: (masters as Master[]) ?? [],
             knowledgeItems: (knowledgeItems as KnowledgeItem[]) ?? [],
+            bookedSlots,
           },
           ((history as Message[]) ?? []).reverse(),
-          ctx.message.text
+          ctx.message.text,
+          client.id
         )
 
         reply = result.reply
 
-        // Notify business owner when client wants to book
+        // Notify business owner when booking is created or intent detected
         const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
           ?.notification_telegram_id
-        if (result.intent === 'booking' && notifId) {
+        if (notifId && (result.bookingCreated || result.intent === 'booking')) {
           const clientName =
             [client.first_name, client.last_name].filter(Boolean).join(' ') ||
             (ctx.from?.username ? `@${ctx.from.username}` : 'Клиент')
+          const notifText = result.bookingCreated
+            ? `📅 Новая заявка на запись!\n👤 ${clientName}\n💬 «${ctx.message.text}»\n\nОткройте панель для подтверждения.`
+            : `💬 Клиент интересуется записью:\n👤 ${clientName}\n💬 «${ctx.message.text}»`
           fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: notifId,
-              text: `📅 Новый запрос на запись!\n👤 ${clientName}\n💬 «${ctx.message.text}»`,
-            }),
+            body: JSON.stringify({ chat_id: notifId, text: notifText }),
           }).catch(() => {})
         }
 
