@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { encryptToken, decryptToken } from '@/lib/crypto'
 
 export async function updateBusiness(
   _prev: { error: string | null; success: boolean },
@@ -41,7 +42,8 @@ export async function saveBotToken(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Не авторизован', success: false }
 
-  const token = (formData.get('telegram_bot_token') as string).trim() || null
+  const raw = (formData.get('telegram_bot_token') as string).trim()
+  const token = raw ? encryptToken(raw) : null
 
   const { error } = await supabase
     .from('businesses')
@@ -70,12 +72,13 @@ export async function connectWebhook(businessId: string): Promise<{ error: strin
 
   if (!business?.telegram_bot_token) return { error: 'Сначала сохраните токен бота', ok: false }
 
+  const plainToken = decryptToken(business.telegram_bot_token)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET
-  const webhookUrl = `${appUrl}/api/telegram/webhook?token=${business.telegram_bot_token}`
+  const webhookUrl = `${appUrl}/api/telegram/webhook?id=${businessId}`
 
   const res = await fetch(
-    `https://api.telegram.org/bot${business.telegram_bot_token}/setWebhook`,
+    `https://api.telegram.org/bot${plainToken}/setWebhook`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

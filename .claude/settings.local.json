@@ -8,7 +8,29 @@
       "Bash(node:*)",
       "Bash(npx create-next-app@latest:*)",
       "Bash(cp:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(ssh:*)",
+      "mcp__github__list_issues",
+      "mcp__github__create_issue",
+      "Bash(gh project:*)",
+      "Bash(python3:*)",
+      "Bash(npm run:*)",
+      "mcp__github__create_pull_request",
+      "Bash(pip3 install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(ls:*)",
+      "mcp__github__update_issue",
+      "mcp__github__merge_pull_request",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__apply_migration",
+      "Bash(curl:*)",
+      "mcp__supabase__get_logs",
+      "Bash(env:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "github"
+  ]
 }

@@ -1,38 +1,29 @@
-import { Bot, Context } from 'grammy'
+import { Bot } from 'grammy'
 import { createServiceClient } from '@/lib/supabase/server'
 import { processMessage } from '@/lib/ai/engine'
 import { checkRateLimit } from './rate-limiter'
 import type { Business, Service, Master, KnowledgeItem, Client, Message } from '@/types/database'
 
-// Cache bot instances: token → Bot
+// Cache bot instances: businessId → Bot
 const botCache = new Map<string, Bot>()
 
-export interface BusinessBot {
-  bot: Bot
-  businessId: string
-}
+export async function getOrCreateBot(plainToken: string, businessId: string): Promise<Bot> {
+  if (botCache.has(businessId)) return botCache.get(businessId)!
 
-export async function getOrCreateBot(token: string): Promise<Bot> {
-  if (botCache.has(token)) return botCache.get(token)!
-
-  const bot = new Bot(token)
-  setupHandlers(bot)
-  botCache.set(token, bot)
+  const bot = new Bot(plainToken)
+  setupHandlers(bot, businessId)
+  botCache.set(businessId, bot)
   return bot
 }
 
-function setupHandlers(bot: Bot) {
+function setupHandlers(bot: Bot, businessId: string) {
   bot.command('start', async (ctx) => {
     const supabase = await createServiceClient()
-    const telegramUserId = ctx.from?.id
-    if (!telegramUserId) return
 
-    // Find business by bot token
-    const botToken = (ctx as Context & { api: { token: string } }).api.token
     const { data: business } = await supabase
       .from('businesses')
       .select('*')
-      .eq('telegram_bot_token', botToken)
+      .eq('id', businessId)
       .single<Business>()
 
     if (!business) {
@@ -59,13 +50,12 @@ function setupHandlers(bot: Bot) {
     }
 
     const supabase = await createServiceClient()
-    const botToken = (ctx.api as unknown as { token: string }).token
 
     // Find business
     const { data: business } = await supabase
       .from('businesses')
       .select('*')
-      .eq('telegram_bot_token', botToken)
+      .eq('id', businessId)
       .single<Business>()
 
     if (!business) return

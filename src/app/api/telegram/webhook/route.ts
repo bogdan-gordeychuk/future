@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { webhookCallback } from 'grammy'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getOrCreateBot } from '@/lib/telegram/bot-factory'
+import { decryptToken } from '@/lib/crypto'
 import type { Business } from '@/types/database'
 
 export const runtime = 'nodejs'
@@ -15,28 +16,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Extract bot token from URL: /api/telegram/webhook?token=xxx
-  const token = req.nextUrl.searchParams.get('token')
-  if (!token) {
-    return NextResponse.json({ error: 'Missing token' }, { status: 400 })
+  // Extract business ID from URL: /api/telegram/webhook?id=BUSINESS_UUID
+  const businessId = req.nextUrl.searchParams.get('id')
+  if (!businessId) {
+    return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   }
 
   try {
     const supabase = await createServiceClient()
 
-    // Find business by bot token
     const { data: business } = await supabase
       .from('businesses')
       .select('id, telegram_bot_token')
-      .eq('telegram_bot_token', token)
+      .eq('id', businessId)
       .single<Pick<Business, 'id' | 'telegram_bot_token'>>()
 
-    if (!business) {
+    if (!business?.telegram_bot_token) {
       // Return 200 to prevent Telegram from retrying
       return NextResponse.json({ ok: true })
     }
 
-    const bot = await getOrCreateBot(token)
+    const plainToken = decryptToken(business.telegram_bot_token)
+    const bot = await getOrCreateBot(plainToken, business.id)
     const handler = webhookCallback(bot, 'std/http')
     return handler(req)
   } catch (err) {
