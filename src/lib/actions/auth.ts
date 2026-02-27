@@ -32,7 +32,7 @@ export async function register(
   if (!data.user) return { error: 'Не удалось создать аккаунт' }
 
   const serviceClient = await createServiceClient()
-  await serviceClient.from('businesses').insert({
+  const { error: bizError } = await serviceClient.from('businesses').insert({
     owner_id: data.user.id,
     name: businessName,
     settings: {
@@ -50,6 +50,7 @@ export async function register(
       },
     },
   })
+  if (bizError) return { error: `Ошибка создания бизнеса: ${bizError.message}` }
 
   redirect('/dashboard')
 }
