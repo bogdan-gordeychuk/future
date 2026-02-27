@@ -103,7 +103,8 @@ export async function connectWebhook(businessId: string): Promise<{ error: strin
   if (!business?.telegram_bot_token) return { error: 'Сначала сохраните токен бота', ok: false }
 
   const plainToken = decryptToken(business.telegram_bot_token)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  // Strip trailing slash to prevent double-slash in webhook URL
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET
   const webhookUrl = `${appUrl}/api/telegram/webhook?id=${businessId}`
 
