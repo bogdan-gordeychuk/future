@@ -11,12 +11,12 @@ export async function getOrCreateBot(plainToken: string, businessId: string): Pr
   if (botCache.has(businessId)) return botCache.get(businessId)!
 
   const bot = new Bot(plainToken)
-  setupHandlers(bot, businessId)
+  setupHandlers(bot, businessId, plainToken)
   botCache.set(businessId, bot)
   return bot
 }
 
-function setupHandlers(bot: Bot, businessId: string) {
+function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
   bot.command('start', async (ctx) => {
     const supabase = await createServiceClient()
 
@@ -164,6 +164,23 @@ function setupHandlers(bot: Bot, businessId: string) {
         )
 
         reply = result.reply
+
+        // Notify business owner when client wants to book
+        const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
+          ?.notification_telegram_id
+        if (result.intent === 'booking' && notifId) {
+          const clientName =
+            [client.first_name, client.last_name].filter(Boolean).join(' ') ||
+            (ctx.from?.username ? `@${ctx.from.username}` : 'Клиент')
+          fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: notifId,
+              text: `📅 Новый запрос на запись!\n👤 ${clientName}\n💬 «${ctx.message.text}»`,
+            }),
+          }).catch(() => {})
+        }
 
         // Save assistant message
         await supabase.from('messages').insert({

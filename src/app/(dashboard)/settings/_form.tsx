@@ -12,12 +12,13 @@ interface Props {
   phone: string
   address: string
   city: string
+  notificationTelegramId: string
   hasToken: boolean
   maskedToken: string | null
 }
 
 export default function SettingsForm({
-  businessId, name, description, phone, address, city, hasToken, maskedToken,
+  businessId, name, description, phone, address, city, notificationTelegramId, hasToken, maskedToken,
 }: Props) {
   const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
   const [botState, botAction, botPending] = useActionState(saveBotToken, { error: null, success: false })
@@ -49,6 +50,12 @@ export default function SettingsForm({
             placeholder="Улица, дом, офис/кабинет" />
           <Field label="Город" name="city" defaultValue={city}
             placeholder="Москва" />
+          <Field
+            label="Telegram ID для уведомлений о записях"
+            name="notification_telegram_id"
+            defaultValue={notificationTelegramId}
+            placeholder="123456789 — узнать через @userinfobot"
+          />
 
           {infoState.error && <p className="text-sm text-red-600">{infoState.error}</p>}
           {infoState.success && <p className="text-sm text-green-600">Сохранено</p>}

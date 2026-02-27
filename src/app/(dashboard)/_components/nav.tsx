@@ -8,6 +8,7 @@ const links = [
   { href: '/bookings', label: 'Записи' },
   { href: '/services', label: 'Услуги' },
   { href: '/masters', label: 'Мастера' },
+  { href: '/knowledge', label: 'База знаний' },
   { href: '/settings', label: 'Настройки' },
   { href: '/billing', label: 'Подписка' },
 ]

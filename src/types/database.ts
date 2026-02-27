@@ -16,6 +16,7 @@ export interface BusinessSettings {
   auto_reply_enabled: boolean
   welcome_message: string
   escalation_keywords: string[]
+  notification_telegram_id?: string | null
   working_hours: {
     mon: WorkingHoursDay
     tue: WorkingHoursDay

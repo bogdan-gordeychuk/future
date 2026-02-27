@@ -15,6 +15,16 @@ export async function updateBusiness(
   const name = (formData.get('name') as string).trim()
   if (!name) return { error: 'Название обязательно', success: false }
 
+  const notifId = (formData.get('notification_telegram_id') as string)?.trim() || null
+
+  // Merge notification_telegram_id into existing settings JSONB
+  const { data: biz } = await supabase
+    .from('businesses')
+    .select('settings')
+    .eq('owner_id', user.id)
+    .single()
+  const mergedSettings = { ...(biz?.settings as object ?? {}), notification_telegram_id: notifId }
+
   const { error } = await supabase
     .from('businesses')
     .update({
@@ -23,6 +33,7 @@ export async function updateBusiness(
       phone: formData.get('phone') as string || null,
       address: formData.get('address') as string || null,
       city: formData.get('city') as string || null,
+      settings: mergedSettings,
       // telegram_bot_token намеренно не трогаем — отдельный action
     })
     .eq('owner_id', user.id)
