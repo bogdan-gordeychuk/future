@@ -41,8 +41,9 @@ export async function POST(req: NextRequest) {
     const handler = webhookCallback(bot, 'std/http')
     return handler(req)
   } catch (err) {
-    console.error('[webhook] Error processing update:', err)
-    // Always return 200 to Telegram
+    const errInfo = err instanceof Error ? { message: err.message, stack: err.stack } : err
+    console.error(`[webhook] Error processing update for businessId=${businessId}:`, errInfo)
+    // Always return 200 to Telegram to prevent retries
     return NextResponse.json({ ok: true })
   }
 }

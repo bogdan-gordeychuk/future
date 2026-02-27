@@ -7,6 +7,22 @@ import type { Business, Service, Master, KnowledgeItem, Client, Message } from '
 // Cache bot instances: businessId → Bot
 const botCache = new Map<string, Bot>()
 
+const TRIAL_EXPIRED_MSG =
+  'Пробный период закончился. Чтобы продолжить пользоваться ботом, оформите подписку в личном кабинете.'
+const PAID_LIMIT_MSG =
+  'К сожалению, лимит AI-сообщений на этот месяц исчерпан. Для записи напишите нам напрямую.'
+
+// Structured logging helpers
+function log(bizId: string, msg: string, data?: unknown) {
+  const prefix = `[bot:${bizId.slice(0, 8)}]`
+  data !== undefined ? console.log(prefix, msg, data) : console.log(prefix, msg)
+}
+
+function logError(bizId: string, msg: string, err: unknown) {
+  const errInfo = err instanceof Error ? { message: err.message, stack: err.stack } : err
+  console.error(`[bot:${bizId.slice(0, 8)}]`, msg, errInfo)
+}
+
 export async function getOrCreateBot(plainToken: string, businessId: string): Promise<Bot> {
   if (botCache.has(businessId)) return botCache.get(businessId)!
 
@@ -19,78 +35,106 @@ export async function getOrCreateBot(plainToken: string, businessId: string): Pr
 function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
   bot.command('start', async (ctx) => {
     const supabase = await createServiceClient()
+    try {
+      const { data: business, error } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('id', businessId)
+        .single<Business>()
 
-    const { data: business } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('id', businessId)
-      .single<Business>()
+      if (error || !business) {
+        log(businessId, '/start: business not found in DB')
+        await ctx.reply('Бот не настроен. Обратитесь к администратору.')
+        return
+      }
 
-    if (!business) {
-      await ctx.reply('Бот не настроен. Обратитесь к администратору.')
-      return
+      const settings = business.settings as { welcome_message?: string }
+      const welcome =
+        settings?.welcome_message || `Привет! Я помощник ${business.name}. Чем могу помочь?`
+      await ctx.reply(welcome)
+    } catch (err) {
+      logError(businessId, '/start unhandled error:', err)
+      await ctx.reply('Произошла ошибка. Попробуйте позже.')
     }
-
-    const settings = business.settings as { welcome_message?: string }
-    const welcome =
-      settings?.welcome_message ||
-      `Привет! Я помощник ${business.name}. Чем могу помочь?`
-
-    await ctx.reply(welcome)
   })
 
   bot.on('message:text', async (ctx) => {
     const telegramUserId = ctx.from?.id
     if (!telegramUserId) return
 
-    // Rate limit check
+    log(businessId, `msg from tgUser=${telegramUserId}: "${ctx.message.text.slice(0, 60)}"`)
+
+    // Rate limit
     if (!checkRateLimit(telegramUserId)) {
+      log(businessId, `rate limit hit for tgUser=${telegramUserId}`)
       await ctx.reply('Подождите немного — слишком много сообщений.')
       return
     }
 
     const supabase = await createServiceClient()
 
-    // Find business
-    const { data: business } = await supabase
+    // Step 1: Get business
+    const { data: business, error: bizError } = await supabase
       .from('businesses')
       .select('*')
       .eq('id', businessId)
       .single<Business>()
 
-    if (!business) return
+    if (bizError || !business) {
+      logError(businessId, 'DB error fetching business:', bizError)
+      return
+    }
 
-    // Check trial / subscription expiry
+    // Step 2: Check trial expiry by date
     const now = new Date()
-    const trialExpired =
+    const trialExpiredByDate =
       business.subscription_status === 'trial' &&
+      business.trial_ends_at !== null &&
       new Date(business.trial_ends_at) < now
     const subExpired =
-      business.subscription_status === 'expired' ||
-      business.subscription_status === 'cancelled'
+      business.subscription_status === 'expired' || business.subscription_status === 'cancelled'
 
-    if (trialExpired || subExpired) {
+    if (trialExpiredByDate || subExpired) {
+      log(businessId, `access blocked: trialByDate=${trialExpiredByDate} subExpired=${subExpired}`)
       await ctx.reply(
-        'Доступ к боту временно приостановлен. Пожалуйста, свяжитесь с владельцем.'
+        trialExpiredByDate
+          ? TRIAL_EXPIRED_MSG
+          : 'Доступ к боту приостановлен. Пожалуйста, свяжитесь с владельцем.'
       )
       return
     }
 
-    // Check subscription message limits
-    const { data: subscription } = await supabase
+    // Step 3: Get active subscription
+    const { data: subscription, error: subError } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('business_id', business.id)
       .eq('status', 'active')
       .single()
 
+    if (subError && subError.code !== 'PGRST116') {
+      // PGRST116 = no rows found, not an error for us
+      logError(businessId, 'DB error fetching subscription:', subError)
+    }
+
+    // Step 4: Check message limit
     const limitExceeded =
       subscription &&
       subscription.messages_limit !== -1 &&
       subscription.messages_used >= subscription.messages_limit
 
-    // Upsert client
-    const { data: client } = await supabase
+    if (limitExceeded) {
+      const isTrial = subscription.plan === 'trial'
+      log(
+        businessId,
+        `limit exceeded: plan=${subscription.plan} used=${subscription.messages_used}/${subscription.messages_limit}`
+      )
+      await ctx.reply(isTrial ? TRIAL_EXPIRED_MSG : PAID_LIMIT_MSG)
+      return
+    }
+
+    // Step 5: Upsert client
+    const { data: client, error: clientError } = await supabase
       .from('clients')
       .upsert(
         {
@@ -105,104 +149,167 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       .select()
       .single<Client>()
 
-    if (!client) return
+    if (clientError || !client) {
+      logError(businessId, `DB error upserting client (tgUser=${telegramUserId}):`, clientError)
+      await ctx.reply('Произошла ошибка. Попробуйте позже или свяжитесь с нами напрямую.')
+      return
+    }
 
-    // Save user message
-    await supabase.from('messages').insert({
+    // Step 6: Save user message
+    const { error: userMsgError } = await supabase.from('messages').insert({
       business_id: business.id,
       client_id: client.id,
       role: 'user',
       content: ctx.message.text,
       tokens_used: 0,
     })
+    if (userMsgError) {
+      logError(businessId, `DB error saving user message (client=${client.id}):`, userMsgError)
+    }
+
+    // Step 7: Load context in parallel
+    const now7d = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
+    const tz =
+      (business.settings as { timezone?: string } | null)?.timezone || 'Europe/Moscow'
+
+    const [
+      { data: services, error: svcError },
+      { data: masters, error: masterError },
+      { data: knowledgeItems, error: kbError },
+      { data: history, error: histError },
+      { data: upcomingBookings, error: bookError },
+    ] = await Promise.all([
+      supabase
+        .from('services')
+        .select('*')
+        .eq('business_id', business.id)
+        .eq('is_active', true)
+        .order('sort_order'),
+      supabase
+        .from('masters')
+        .select('*')
+        .eq('business_id', business.id)
+        .eq('is_active', true),
+      supabase
+        .from('knowledge_items')
+        .select('*')
+        .eq('business_id', business.id)
+        .eq('is_active', true)
+        .order('sort_order'),
+      supabase
+        .from('messages')
+        .select('*')
+        .eq('business_id', business.id)
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('bookings')
+        .select('scheduled_at, services(name)')
+        .eq('business_id', business.id)
+        .gte('scheduled_at', new Date().toISOString())
+        .lte('scheduled_at', now7d)
+        .in('status', ['pending', 'confirmed']),
+    ])
+
+    if (svcError) logError(businessId, 'DB error loading services:', svcError)
+    if (masterError) logError(businessId, 'DB error loading masters:', masterError)
+    if (kbError) logError(businessId, 'DB error loading knowledge_items:', kbError)
+    if (histError) logError(businessId, `DB error loading history (client=${client.id}):`, histError)
+    if (bookError) logError(businessId, 'DB error loading upcoming bookings:', bookError)
+
+    // Format booked slots for AI context
+    const bookedSlots = (upcomingBookings ?? []).map((b) => {
+      const svc = Array.isArray(b.services) ? b.services[0] : b.services
+      const time = new Date(b.scheduled_at).toLocaleString('ru-RU', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: tz,
+      })
+      return `- ${time}${svc?.name ? ` (${svc.name})` : ''}`
+    })
 
     let reply: string
 
-    if (limitExceeded) {
-      reply =
-        'К сожалению, лимит сообщений на этот месяц исчерпан. Свяжитесь с нами напрямую.'
-    } else {
-      // Load context in parallel (now includes booked slots for next 7 days)
-      const now7d = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
-      const tz = (business.settings as { timezone?: string } | null)?.timezone || 'Europe/Moscow'
+    // Step 8: Call AI
+    try {
+      log(businessId, `calling AI (client=${client.id} services=${services?.length ?? 0})`)
+      const result = await processMessage(
+        {
+          business,
+          services: (services as Service[]) ?? [],
+          masters: (masters as Master[]) ?? [],
+          knowledgeItems: (knowledgeItems as KnowledgeItem[]) ?? [],
+          bookedSlots,
+        },
+        ((history as Message[]) ?? []).reverse(),
+        ctx.message.text,
+        client.id
+      )
 
-      const [{ data: services }, { data: masters }, { data: knowledgeItems }, { data: history }, { data: upcomingBookings }] =
-        await Promise.all([
-          supabase.from('services').select('*').eq('business_id', business.id).eq('is_active', true).order('sort_order'),
-          supabase.from('masters').select('*').eq('business_id', business.id).eq('is_active', true),
-          supabase.from('knowledge_items').select('*').eq('business_id', business.id).eq('is_active', true).order('sort_order'),
-          supabase.from('messages').select('*').eq('business_id', business.id).eq('client_id', client.id).order('created_at', { ascending: false }).limit(20),
-          supabase.from('bookings').select('scheduled_at, services(name)').eq('business_id', business.id).gte('scheduled_at', new Date().toISOString()).lte('scheduled_at', now7d).in('status', ['pending', 'confirmed']),
-        ])
+      reply = result.reply
+      log(
+        businessId,
+        `AI done: intent=${result.intent} tokens=${result.tokensUsed} booking=${result.bookingCreated ?? false}`
+      )
 
-      // Format booked slots for AI context
-      const bookedSlots = (upcomingBookings ?? []).map((b) => {
-        const svc = Array.isArray(b.services) ? b.services[0] : b.services
-        const time = new Date(b.scheduled_at).toLocaleString('ru-RU', {
-          weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz,
-        })
-        return `- ${time}${svc?.name ? ` (${svc.name})` : ''}`
-      })
-
-      try {
-        const result = await processMessage(
-          {
-            business,
-            services: (services as Service[]) ?? [],
-            masters: (masters as Master[]) ?? [],
-            knowledgeItems: (knowledgeItems as KnowledgeItem[]) ?? [],
-            bookedSlots,
-          },
-          ((history as Message[]) ?? []).reverse(),
-          ctx.message.text,
-          client.id
-        )
-
-        reply = result.reply
-
-        // Notify business owner when booking is created or intent detected
-        const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
-          ?.notification_telegram_id
-        if (notifId && (result.bookingCreated || result.intent === 'booking')) {
-          const clientName =
-            [client.first_name, client.last_name].filter(Boolean).join(' ') ||
-            (ctx.from?.username ? `@${ctx.from.username}` : 'Клиент')
-          const notifText = result.bookingCreated
-            ? `📅 Новая заявка на запись!\n👤 ${clientName}\n💬 «${ctx.message.text}»\n\nОткройте панель для подтверждения.`
-            : `💬 Клиент интересуется записью:\n👤 ${clientName}\n💬 «${ctx.message.text}»`
-          fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: notifId, text: notifText }),
-          }).catch(() => {})
-        }
-
-        // Save assistant message
-        await supabase.from('messages').insert({
-          business_id: business.id,
-          client_id: client.id,
-          role: 'assistant',
-          content: reply,
-          tokens_used: result.tokensUsed,
-        })
-
-        // Increment usage counter
-        if (subscription) {
-          await supabase
-            .from('subscriptions')
-            .update({ messages_used: subscription.messages_used + 1 })
-            .eq('id', subscription.id)
-        }
-      } catch (err) {
-        console.error('[bot-factory] AI error:', err)
-        reply = 'Произошла ошибка. Попробуйте позже или свяжитесь с нами напрямую.'
+      // Notify business owner on booking intent
+      const notifId = (
+        business.settings as { notification_telegram_id?: string | null } | null
+      )?.notification_telegram_id
+      if (notifId && (result.bookingCreated || result.intent === 'booking')) {
+        const clientName =
+          [client.first_name, client.last_name].filter(Boolean).join(' ') ||
+          (ctx.from?.username ? `@${ctx.from.username}` : 'Клиент')
+        const notifText = result.bookingCreated
+          ? `📅 Новая заявка на запись!\n👤 ${clientName}\n💬 «${ctx.message.text}»\n\nОткройте панель для подтверждения.`
+          : `💬 Клиент интересуется записью:\n👤 ${clientName}\n💬 «${ctx.message.text}»`
+        fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: notifId, text: notifText }),
+        }).catch((err) => logError(businessId, 'Telegram notification send error:', err))
       }
+
+      // Save assistant message
+      const { error: assistMsgError } = await supabase.from('messages').insert({
+        business_id: business.id,
+        client_id: client.id,
+        role: 'assistant',
+        content: reply,
+        tokens_used: result.tokensUsed,
+      })
+      if (assistMsgError) {
+        logError(businessId, 'DB error saving assistant message:', assistMsgError)
+      }
+
+      // Increment usage counter
+      if (subscription) {
+        const { error: subUpdateError } = await supabase
+          .from('subscriptions')
+          .update({ messages_used: subscription.messages_used + 1 })
+          .eq('id', subscription.id)
+        if (subUpdateError) {
+          logError(businessId, 'DB error updating messages_used:', subUpdateError)
+        }
+      }
+    } catch (err) {
+      logError(businessId, `AI processing error (client=${client.id}):`, err)
+      reply = 'Произошла ошибка. Попробуйте позже или свяжитесь с нами напрямую.'
     }
 
-    await ctx.reply(reply)
+    // Step 9: Send reply to user
+    try {
+      await ctx.reply(reply)
+    } catch (err) {
+      logError(businessId, 'Telegram send reply error:', err)
+    }
   })
 
   bot.catch((err) => {
-    console.error('[bot-factory] Unhandled error:', err)
+    logError(businessId, 'Unhandled bot framework error:', err)
   })
 }
