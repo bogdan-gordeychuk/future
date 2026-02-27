@@ -1,0 +1,48 @@
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { AddMasterForm, MasterRow } from './_form'
+import type { Master } from '@/types/database'
+
+export default async function MastersPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: business } = await supabase
+    .from('businesses')
+    .select('id')
+    .eq('owner_id', user.id)
+    .single()
+
+  if (!business) redirect('/dashboard')
+
+  const { data: masters } = await supabase
+    .from('masters')
+    .select('*')
+    .eq('business_id', business.id)
+    .order('created_at')
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Мастера</h1>
+          <p className="text-sm text-zinc-400 mt-1">Сотрудники, к которым можно записаться</p>
+        </div>
+      </div>
+
+      <div className="space-y-3 mb-6">
+        {(masters as Master[] ?? []).map((master) => (
+          <MasterRow key={master.id} master={master} />
+        ))}
+        {(!masters || masters.length === 0) && (
+          <div className="rounded-xl bg-white p-8 shadow-sm text-center">
+            <p className="text-zinc-400 text-sm">Мастеров пока нет. Добавьте первого.</p>
+          </div>
+        )}
+      </div>
+
+      <AddMasterForm />
+    </div>
+  )
+}
