@@ -312,6 +312,9 @@ export default function LandingPage() {
             <Link href="/privacy" className="text-xs text-zinc-500 hover:text-zinc-300">
               Политика конфиденциальности
             </Link>
+            <Link href="/offer" className="text-xs text-zinc-500 hover:text-zinc-300">
+              Договор оферты
+            </Link>
             <a href="mailto:comedi4@gmail.com" className="text-xs text-zinc-500 hover:text-zinc-300">
               comedi4@gmail.com
             </a>

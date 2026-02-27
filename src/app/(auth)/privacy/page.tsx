@@ -10,7 +10,7 @@ export default function PrivacyPage() {
             <h2 className="text-base font-semibold text-zinc-900 mb-2">1. Кто мы</h2>
             <p>
               ВИКА — сервис AI-ассистента для онлайн-записи клиентов через Telegram.
-              Оператор персональных данных: Горделюк Богдан, самозанятый.
+              Оператор персональных данных: Гордейчук Богдан, самозанятый.
               Контакт: <a href="mailto:comedi4@gmail.com" className="text-zinc-900 underline">comedi4@gmail.com</a>
             </p>
           </section>
@@ -80,8 +80,9 @@ export default function PrivacyPage() {
           </section>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-zinc-100">
+        <div className="mt-8 pt-6 border-t border-zinc-100 flex gap-5">
           <a href="/register" className="text-sm text-zinc-500 hover:text-zinc-900">← Вернуться к регистрации</a>
+          <a href="/offer" className="text-sm text-zinc-500 hover:text-zinc-900">Договор оферты</a>
         </div>
       </div>
     </div>
