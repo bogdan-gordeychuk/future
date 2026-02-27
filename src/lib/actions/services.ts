@@ -94,3 +94,20 @@ export async function toggleService(id: string, isActive: boolean): Promise<void
 
   revalidatePath('/services')
 }
+
+export async function deleteService(id: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const business = await getBusiness(supabase, user.id)
+  if (!business) return
+
+  await supabase
+    .from('services')
+    .delete()
+    .eq('id', id)
+    .eq('business_id', business.id)
+
+  revalidatePath('/services')
+}

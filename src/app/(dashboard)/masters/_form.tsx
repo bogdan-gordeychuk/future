@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState, useState } from 'react'
-import { createMaster, toggleMaster } from '@/lib/actions/masters'
+import { useActionState } from 'react'
+import { useState } from 'react'
+import { createMaster, updateMaster, toggleMaster, deleteMaster } from '@/lib/actions/masters'
 import type { Master } from '@/types/database'
 
 const INPUT = 'w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 placeholder:text-zinc-400'
@@ -46,18 +47,60 @@ export function AddMasterForm() {
 }
 
 export function MasterRow({ master }: { master: Master }) {
+  const [editing, setEditing] = useState(false)
+  const [state, action, pending] = useActionState(updateMaster, { error: null })
+
+  if (editing) {
+    return (
+      <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-medium text-zinc-900 mb-4">Редактировать специалиста</h3>
+        <form action={async (fd) => { await action(fd); setEditing(false) }} className="space-y-3">
+          <input type="hidden" name="id" value={master.id} />
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700">Имя *</label>
+            <input type="text" name="name" defaultValue={master.name} required
+              placeholder="Имя специалиста" className={INPUT} />
+          </div>
+          {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={pending}
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
+              {pending ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            <button type="button" onClick={() => setEditing(false)}
+              className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
+              Отмена
+            </button>
+          </div>
+        </form>
+      </div>
+    )
+  }
+
   return (
     <div className={`rounded-xl bg-white p-5 shadow-sm flex items-center justify-between gap-4 ${!master.is_active ? 'opacity-50' : ''}`}>
       <div>
         <p className="text-sm font-medium text-zinc-900">{master.name}</p>
         <p className="text-xs text-zinc-400 mt-0.5">{master.is_active ? 'Активен' : 'Скрыт'}</p>
       </div>
-      <form action={() => toggleMaster(master.id, master.is_active)}>
-        <button type="submit"
+      <div className="flex gap-2 shrink-0">
+        <button onClick={() => setEditing(true)}
           className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50">
-          {master.is_active ? 'Скрыть' : 'Показать'}
+          Изменить
         </button>
-      </form>
+        <form action={() => toggleMaster(master.id, master.is_active)}>
+          <button type="submit"
+            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50">
+            {master.is_active ? 'Скрыть' : 'Показать'}
+          </button>
+        </form>
+        <button
+          type="button"
+          onClick={() => { if (confirm(`Удалить специалиста «${master.name}»?`)) deleteMaster(master.id) }}
+          className="rounded-lg border border-red-100 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50">
+          Удалить
+        </button>
+      </div>
     </div>
   )
 }

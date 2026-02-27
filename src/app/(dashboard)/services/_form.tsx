@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { createService, updateService, toggleService } from '@/lib/actions/services'
+import { createService, updateService, toggleService, deleteService } from '@/lib/actions/services'
 import type { Service } from '@/types/database'
 
 export function AddServiceForm() {
@@ -110,6 +110,13 @@ export function ServiceRow({ service }: { service: Service }) {
             {service.is_active ? 'Скрыть' : 'Показать'}
           </button>
         </form>
+        <button
+          type="button"
+          onClick={() => { if (confirm(`Удалить услугу «${service.name}»?`)) deleteService(service.id) }}
+          className="rounded-lg border border-red-100 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50"
+        >
+          Удалить
+        </button>
       </div>
     </div>
   )
