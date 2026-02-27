@@ -115,7 +115,7 @@ export default async function AnalyticsPage() {
   // Top services — group in JS (data is already filtered)
   const serviceCountMap: Record<string, number> = {}
   for (const booking of topServicesRaw ?? []) {
-    const svc = booking.services as { name: string } | null
+    const svc = booking.services as unknown as { name: string } | null
     const name = svc?.name ?? 'Без услуги'
     serviceCountMap[name] = (serviceCountMap[name] ?? 0) + 1
   }
