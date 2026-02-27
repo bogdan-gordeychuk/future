@@ -1,5 +1,7 @@
 import Link from 'next/link'
 
+export const revalidate = 3600 // ISR: revalidate every hour
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -23,7 +25,7 @@ export default function LandingPage() {
       <section className="flex items-center justify-center px-6 py-20 sm:py-28">
         <div className="max-w-2xl text-center">
           <div className="inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600 mb-6">
-            14 дней бесплатно · без карты · для малого бизнеса
+            14 дней или 400 сообщений бесплатно · без карты
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-zinc-900 leading-tight mb-5">
             Ваш Telegram-бот,<br className="hidden sm:block" /> который записывает клиентов
@@ -171,7 +173,7 @@ export default function LandingPage() {
               <span className="text-4xl font-bold text-zinc-900">1 490 ₽</span>
             </div>
             <p className="text-sm text-zinc-400 mb-2">в месяц</p>
-            <p className="text-xs text-green-600 font-medium mb-7">14 дней бесплатно при регистрации</p>
+            <p className="text-xs text-green-600 font-medium mb-7">14 дней или 400 сообщений бесплатно</p>
             <ul className="text-sm text-zinc-600 space-y-2.5 text-left mb-8">
               {[
                 '1 000 AI-сообщений в месяц',
@@ -188,7 +190,7 @@ export default function LandingPage() {
             </ul>
             <Link href="/register"
               className="block w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 text-center">
-              Попробовать 14 дней бесплатно
+              Попробовать бесплатно →
             </Link>
           </div>
         </div>
@@ -297,7 +299,7 @@ export default function LandingPage() {
       {/* CTA bottom */}
       <section className="border-t border-zinc-100 bg-zinc-900 py-16 px-6 text-center">
         <h2 className="text-2xl font-semibold text-white mb-3">Готовы попробовать?</h2>
-        <p className="text-sm text-zinc-400 mb-8">14 дней бесплатно. Настройка за 15 минут. Отмена в любой момент.</p>
+        <p className="text-sm text-zinc-400 mb-8">14 дней или 400 сообщений бесплатно. Настройка за 15 минут. Отмена в любой момент.</p>
         <Link href="/register"
           className="inline-block rounded-lg bg-white px-8 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-100">
           Создать аккаунт бесплатно →

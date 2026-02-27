@@ -37,9 +37,12 @@ export default async function AnalyticsPage() {
 
   const [
     { data: todayBookings },
-    { data: monthBookings },
+    { count: monthBookingsCount },
     { count: totalClients },
     { data: last7daysRaw },
+    { data: topServicesRaw },
+    { data: topMastersRaw },
+    { data: monthRevenueRaw },
   ] = await Promise.all([
     // Today's bookings (confirmed + completed)
     supabase
@@ -50,10 +53,10 @@ export default async function AnalyticsPage() {
       .lt('scheduled_at', `${todayStr}T23:59:59`)
       .in('status', ['confirmed', 'completed']),
 
-    // This month's bookings with service and master names
+    // This month's bookings count
     supabase
       .from('bookings')
-      .select('*, services(name), masters(name)')
+      .select('*', { count: 'exact', head: true })
       .eq('business_id', businessId)
       .gte('scheduled_at', monthStart)
       .in('status', ['confirmed', 'completed']),
@@ -71,6 +74,32 @@ export default async function AnalyticsPage() {
       .eq('business_id', businessId)
       .gte('scheduled_at', `${sevenDaysAgoStr}T00:00:00`)
       .in('status', ['confirmed', 'completed']),
+
+    // Top services this month
+    supabase
+      .from('bookings')
+      .select('services(name)')
+      .eq('business_id', businessId)
+      .gte('scheduled_at', monthStart)
+      .in('status', ['confirmed', 'completed'])
+      .not('service_id', 'is', null),
+
+    // Top masters this month
+    supabase
+      .from('bookings')
+      .select('masters(name)')
+      .eq('business_id', businessId)
+      .gte('scheduled_at', monthStart)
+      .in('status', ['confirmed', 'completed'])
+      .not('master_id', 'is', null),
+
+    // Month revenue
+    supabase
+      .from('bookings')
+      .select('price_kopecks')
+      .eq('business_id', businessId)
+      .gte('scheduled_at', monthStart)
+      .in('status', ['confirmed', 'completed']),
   ])
 
   // Calculate revenue
@@ -78,14 +107,14 @@ export default async function AnalyticsPage() {
     (sum, b) => sum + (b.price_kopecks ?? 0),
     0
   )
-  const monthRevenue = (monthBookings ?? []).reduce(
+  const monthRevenue = (monthRevenueRaw ?? []).reduce(
     (sum, b) => sum + (b.price_kopecks ?? 0),
     0
   )
 
-  // Top services — group by service name in JS
+  // Top services — group in JS (data is already filtered)
   const serviceCountMap: Record<string, number> = {}
-  for (const booking of monthBookings ?? []) {
+  for (const booking of topServicesRaw ?? []) {
     const svc = booking.services as { name: string } | null
     const name = svc?.name ?? 'Без услуги'
     serviceCountMap[name] = (serviceCountMap[name] ?? 0) + 1
@@ -94,9 +123,9 @@ export default async function AnalyticsPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
 
-  // Top masters — group by master name in JS
+  // Top masters — group in JS (data is already filtered)
   const masterCountMap: Record<string, number> = {}
-  for (const booking of monthBookings ?? []) {
+  for (const booking of topMastersRaw ?? []) {
     const mst = booking.masters as { name: string } | null
     const name = mst?.name ?? 'Без мастера'
     masterCountMap[name] = (masterCountMap[name] ?? 0) + 1
@@ -140,7 +169,7 @@ export default async function AnalyticsPage() {
         </div>
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <p className="text-sm text-zinc-500">Этот месяц</p>
-          <p className="mt-1 text-3xl font-semibold text-zinc-900">{(monthBookings ?? []).length}</p>
+          <p className="mt-1 text-3xl font-semibold text-zinc-900">{monthBookingsCount ?? 0}</p>
           <p className="mt-1 text-sm text-zinc-400">записей · {formatRub(monthRevenue)}</p>
         </div>
         <div className="rounded-xl bg-white p-5 shadow-sm">

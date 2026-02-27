@@ -6,6 +6,10 @@ import { createServiceClient } from '@/lib/supabase/server'
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   const testSecret = process.env.TEST_PAYMENT_SECRET
   const providedSecret = req.nextUrl.searchParams.get('secret')
 

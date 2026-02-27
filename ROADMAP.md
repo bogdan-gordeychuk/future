@@ -39,9 +39,14 @@
 | Webhook статус в настройках | ✅ | Зелёный/серый индикатор + @username |
 | Рабочие часы в AI-промпте | ✅ | Бот не предлагает нерабочее время |
 | Working hours UI | ✅ | Чекбоксы + time-пикеры в настройках, сохраняется в settings JSONB |
-| **Страница клиентов** | ❌ | — |
+| **Страница клиентов** | ✅ | N+1 исправлен, message count по role='user' |
 | **Реальные платежи YooKassa** | ❌ | Пока симуляция |
 | **Dev/Prod окружения** | ❌ | Сейчас только prod |
+| Vercel Analytics | ✅ | @vercel/analytics в layout.tsx |
+| Атомарный increment messages_used | ✅ | SQL RPC, race condition исправлен |
+| Ограничение длины сообщения | ✅ | 1000 символов, защита от token flooding |
+| Мобильная адаптация дашборда | ✅ | Mobile header + bottom nav |
+| Bot cache инвалидация | ✅ | При смене токена |
 
 ---
 
@@ -110,9 +115,10 @@
 ## Беклог — Sprint 7+
 
 ### P0 — Нужно прямо сейчас
-- [ ] **Страница клиентов** — /clients: список с поиском, клик → история переписки + записи
+- [x] **Страница клиентов** — /clients: список с поиском, клик → история переписки + записи ✅
 - [ ] **Real YooKassa payments** — верифицировать shop, webhook, убрать test-activate
-- [ ] **Bot /mybookings** — клиент пишет «мои записи» → видит предстоящие
+- [x] **Bot /mybookings** — клиент пишет «мои записи» → видит предстоящие ✅
+- [ ] **Slot generation timezone bug** — `new Date(slotDateStr)` парсит как UTC, нужен `date-fns-tz`
 
 ### P1 — Удобство для бизнеса
 - [ ] **Аналитика** — /analytics: записей/день, топ услуг, конверсия, выручка
@@ -166,3 +172,22 @@
 - [ ] White-label (бизнес на своём домене)
 - [ ] Филиалы (parent_business_id — архитектура уже готова)
 - [ ] Уведомление Роскомнадзора (перед PR-кампанией)
+
+---
+
+## Последние изменения (2026-02-28)
+
+| Изменение | Файл(ы) | Тип |
+|-----------|---------|-----|
+| Cron schedule исправлен: `"0 8 * * *"` → `"0 * * * *"` (каждый час) | `vercel.json` | Критический баг |
+| Атомарный `increment_messages_used` через SQL RPC | `bot-factory.ts` + `005_atomic_increment.sql` | Критический баг |
+| `test-activate` заблокирован в production (возвращает 404) | `test-activate/route.ts` | Безопасность |
+| Ограничение длины сообщения 1000 символов | `bot-factory.ts` | Безопасность |
+| Добавлен `@vercel/analytics` + `<Analytics />` компонент | `package.json` + `layout.tsx` | Аналитика |
+| Trial copy обновлён: "14 дней или 400 сообщений бесплатно" (4 места) | `page.tsx` | UX/Честность |
+| ISR для лендинга: `revalidate = 3600` | `page.tsx` | Производительность |
+| Счётчик записей на дашборде фильтрует только `confirmed + completed` | `dashboard/page.tsx` | Корректность данных |
+| N+1 исправлен: message count по `role='user'`, last bookings по client IDs | `clients/page.tsx` | Производительность |
+| `invalidateBotCache` вызывается при сохранении нового токена бота | `bot-factory.ts` + `business.ts` | Корректность |
+| Analytics: отдельные SQL-запросы вместо JS-группировки всех записей месяца | `analytics/page.tsx` | Производительность |
+| Мобильная адаптация: скрытый sidebar на мобильных, mobile header, bottom nav | `layout.tsx` + `mobile-nav.tsx` | UX/Mobile |

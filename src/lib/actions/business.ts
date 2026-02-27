@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { encryptToken, decryptToken } from '@/lib/crypto'
+import { invalidateBotCache } from '@/lib/telegram/bot-factory'
 import { WorkingHoursDay, BusinessSettings } from '@/types/database'
 
 type WorkingHoursKey = keyof BusinessSettings['working_hours']
@@ -81,6 +82,16 @@ export async function saveBotToken(
     .eq('owner_id', user.id)
 
   if (error) return { error: error.message, success: false }
+
+  // Invalidate bot cache so the new token is picked up on next request
+  const { data: bizData } = await supabase
+    .from('businesses')
+    .select('id')
+    .eq('owner_id', user.id)
+    .single()
+  if (bizData?.id) {
+    invalidateBotCache(bizData.id)
+  }
 
   revalidatePath('/settings')
   revalidatePath('/dashboard')

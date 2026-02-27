@@ -8,6 +8,11 @@ import type { Business, Service, Master, KnowledgeItem, Client, Message, Busines
 // Cache bot instances: businessId → Bot
 const botCache = new Map<string, Bot>()
 
+/** Call this when a business updates its bot token to force re-initialization */
+export function invalidateBotCache(businessId: string): void {
+  botCache.delete(businessId)
+}
+
 // BookingRow type for client self-cancellation feature
 interface BookingRow {
   id: string
@@ -207,6 +212,13 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     if (!checkRateLimit(telegramUserId)) {
       log(businessId, `rate limit hit for tgUser=${telegramUserId}`)
       await ctx.reply('Подождите немного — слишком много сообщений.')
+      return
+    }
+
+    // Limit message length to prevent token flooding
+    if (ctx.message.text.length > 1000) {
+      log(businessId, `message too long (${ctx.message.text.length} chars) from tgUser=${telegramUserId}`)
+      await ctx.reply('Сообщение слишком длинное. Пожалуйста, напишите короче (до 1000 символов).')
       return
     }
 
@@ -475,9 +487,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       // Increment usage counter
       if (subscription) {
         const { error: subUpdateError } = await supabase
-          .from('subscriptions')
-          .update({ messages_used: subscription.messages_used + 1 })
-          .eq('id', subscription.id)
+          .rpc('increment_messages_used', { sub_id: subscription.id })
         if (subUpdateError) {
           logError(businessId, 'DB error updating messages_used:', subUpdateError)
         }

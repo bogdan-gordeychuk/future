@@ -37,7 +37,8 @@ export default async function DashboardPage() {
       .from('bookings')
       .select('*', { count: 'exact', head: true })
       .eq('business_id', business.id)
-      .gte('scheduled_at', today),
+      .gte('scheduled_at', today)
+      .in('status', ['confirmed', 'completed']),
     supabase
       .from('clients')
       .select('*', { count: 'exact', head: true })
