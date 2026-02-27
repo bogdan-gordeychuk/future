@@ -59,6 +59,7 @@ export default function SettingsForm({
   const [connecting, setConnecting] = useState(false)
   const [replacing, setReplacing] = useState(false)
   const [hours, setHours] = useState<BusinessSettings['working_hours']>(workingHours)
+  const [selectedTimezone, setSelectedTimezone] = useState(timezone || 'Europe/Moscow')
 
   useEffect(() => {
     if (infoState.success) toast.success('Настройки сохранены')
@@ -100,7 +101,8 @@ export default function SettingsForm({
             placeholder="Москва" />
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700">Часовой пояс</label>
-            <select name="timezone" defaultValue={timezone || 'Europe/Moscow'}
+            <select name="timezone" value={selectedTimezone}
+              onChange={e => setSelectedTimezone(e.target.value)}
               className={INPUT}>
               {TIMEZONES.map(tz => (
                 <option key={tz.value} value={tz.value}>{tz.label}</option>
