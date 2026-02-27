@@ -139,3 +139,37 @@ export async function connectWebhook(businessId: string): Promise<{ error: strin
   revalidatePath('/dashboard')
   return { error: null, ok: true }
 }
+
+export async function getWebhookInfo(businessId: string): Promise<{
+  ok: boolean
+  url?: string
+  lastError?: string
+  pendingCount?: number
+  error?: string
+}> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Не авторизован' }
+
+  const serviceClient = await createServiceClient()
+  const { data: business } = await serviceClient
+    .from('businesses')
+    .select('telegram_bot_token')
+    .eq('id', businessId)
+    .eq('owner_id', user.id)
+    .single()
+
+  if (!business?.telegram_bot_token) return { ok: false, error: 'Токен не найден' }
+
+  const plainToken = decryptToken(business.telegram_bot_token)
+  const res = await fetch(`https://api.telegram.org/bot${plainToken}/getWebhookInfo`)
+  const data = await res.json()
+
+  if (!data.ok) return { ok: false, error: `Telegram: ${data.description}` }
+  return {
+    ok: true,
+    url: data.result.url || '(не задан)',
+    lastError: data.result.last_error_message,
+    pendingCount: data.result.pending_update_count,
+  }
+}

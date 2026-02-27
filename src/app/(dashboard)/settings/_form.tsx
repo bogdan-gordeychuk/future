@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { updateBusiness, saveBotToken, connectWebhook } from '@/lib/actions/business'
+import { updateBusiness, saveBotToken, connectWebhook, getWebhookInfo } from '@/lib/actions/business'
 import { BusinessSettings } from '@/types/database'
 
 const INPUT = 'w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 placeholder:text-zinc-400'
@@ -58,6 +58,8 @@ export default function SettingsForm({
   const [botState, botAction, botPending] = useActionState(saveBotToken, { error: null, success: false })
   const [connecting, setConnecting] = useState(false)
   const [replacing, setReplacing] = useState(false)
+  const [webhookInfo, setWebhookInfo] = useState<string | null>(null)
+  const [checkingWebhook, setCheckingWebhook] = useState(false)
   const [hours, setHours] = useState<BusinessSettings['working_hours']>(workingHours)
   const [selectedTimezone, setSelectedTimezone] = useState(timezone || 'Europe/Moscow')
 
@@ -81,6 +83,21 @@ export default function SettingsForm({
       toast.error(result.error ?? 'Ошибка подключения')
     }
     setConnecting(false)
+  }
+
+  async function handleCheckWebhook() {
+    setCheckingWebhook(true)
+    setWebhookInfo(null)
+    const info = await getWebhookInfo(businessId)
+    if (!info.ok) {
+      setWebhookInfo(`Ошибка: ${info.error}`)
+    } else {
+      const parts = [`URL: ${info.url}`]
+      if (info.pendingCount !== undefined) parts.push(`Ожидают: ${info.pendingCount}`)
+      if (info.lastError) parts.push(`Ошибка: ${info.lastError}`)
+      setWebhookInfo(parts.join(' · '))
+    }
+    setCheckingWebhook(false)
   }
 
   return (
@@ -236,7 +253,14 @@ export default function SettingsForm({
                 className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
                 {connecting ? 'Подключение...' : webhookConnected ? 'Переподключить webhook' : 'Подключить webhook'}
               </button>
+              <button type="button" onClick={handleCheckWebhook} disabled={checkingWebhook}
+                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-500 hover:bg-zinc-50 disabled:opacity-50">
+                {checkingWebhook ? '...' : 'Проверить статус'}
+              </button>
             </div>
+            {webhookInfo && (
+              <p className="mt-2 text-xs font-mono text-zinc-500 break-all">{webhookInfo}</p>
+            )}
           </>
         )}
       </div>

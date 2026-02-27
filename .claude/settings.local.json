@@ -33,7 +33,9 @@
       "Bash(gh run:*)",
       "WebFetch(domain:future-weld.vercel.app)",
       "mcp__supabase__list_extensions",
-      "Bash(echo exit: $?:*)"
+      "Bash(echo exit: $?:*)",
+      "Bash(npx tsc:*)",
+      "Bash(source:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
