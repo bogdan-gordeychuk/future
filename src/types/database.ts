@@ -99,6 +99,7 @@ export interface Client {
   telegram_username: string | null
   first_name: string | null
   last_name: string | null
+  preferred_name: string | null
   phone: string | null
   notes: string | null
   visit_count: number

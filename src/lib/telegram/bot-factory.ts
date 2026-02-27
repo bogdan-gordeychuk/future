@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { processMessage } from '@/lib/ai/engine'
 import { checkRateLimit } from './rate-limiter'
 import { decryptToken } from '@/lib/crypto'
-import type { Business, Service, Master, KnowledgeItem, Client, Message } from '@/types/database'
+import type { Business, Service, Master, KnowledgeItem, Client, Message, BusinessSettings } from '@/types/database'
 
 // Cache bot instances: businessId → Bot
 const botCache = new Map<string, Bot>()
@@ -22,6 +22,103 @@ function log(bizId: string, msg: string, data?: unknown) {
 function logError(bizId: string, msg: string, err: unknown) {
   const errInfo = err instanceof Error ? { message: err.message, stack: err.stack } : err
   console.error(`[bot:${bizId.slice(0, 8)}]`, msg, errInfo)
+}
+
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+type DayKey = typeof DAY_KEYS[number]
+
+function generateAvailableSlots(
+  workingHours: BusinessSettings['working_hours'],
+  bookedSlotsRaw: Array<{ scheduled_at: string }>,
+  tz: string,
+  serviceDurationMin?: number
+): string[] {
+  const duration = serviceDurationMin ?? 60
+  const bookedTimes = bookedSlotsRaw.map((b) => new Date(b.scheduled_at).getTime())
+
+  const result: string[] = []
+  let workingDaysFound = 0
+
+  const today = new Date()
+  // Start from tomorrow
+  const startDate = new Date(today)
+  startDate.setDate(today.getDate() + 1)
+
+  for (let dayOffset = 0; dayOffset < 14 && workingDaysFound < 3; dayOffset++) {
+    const date = new Date(startDate)
+    date.setDate(startDate.getDate() + dayOffset)
+
+    // Get day of week in business timezone
+    const dayOfWeek = new Date(
+      date.toLocaleString('en-US', { timeZone: tz })
+    ).getDay() // 0=Sun, 1=Mon, ...
+
+    const dayKey = DAY_KEYS[dayOfWeek]
+    const dayConfig = workingHours[dayKey]
+
+    if (!dayConfig || !dayConfig.enabled) continue
+
+    // Parse start/end times
+    const [startHour, startMin] = dayConfig.start.split(':').map(Number)
+    const [endHour, endMin] = dayConfig.end.split(':').map(Number)
+
+    // Build date string in business timezone for slot generation
+    const dateStr = date.toLocaleDateString('en-CA', { timeZone: tz }) // YYYY-MM-DD
+
+    const daySlots: string[] = []
+
+    let slotHour = startHour
+    let slotMin = startMin
+
+    while (
+      slotHour < endHour ||
+      (slotHour === endHour && slotMin < endMin)
+    ) {
+      // Build ISO string for this slot in the business timezone
+      const slotDateStr = `${dateStr}T${String(slotHour).padStart(2, '0')}:${String(slotMin).padStart(2, '0')}:00`
+      // Parse as local time in tz
+      const slotDate = new Date(
+        new Date(slotDateStr).toLocaleString('en-US', { timeZone: tz })
+      )
+      // Actually we need to create the date properly
+      // Use a different approach: create UTC time from the tz-local time
+      const slotMs = new Date(`${dateStr}T${String(slotHour).padStart(2, '0')}:${String(slotMin).padStart(2, '0')}:00`).getTime()
+
+      // Check if slot conflicts with booked times (±30 min)
+      const isBooked = bookedTimes.some(
+        (bt) => Math.abs(bt - slotMs) < 30 * 60 * 1000
+      )
+
+      if (!isBooked) {
+        // Format slot in Russian
+        const slotFormatted = new Date(slotMs).toLocaleString('ru-RU', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: tz,
+        })
+        daySlots.push(slotFormatted)
+      }
+
+      // Advance by duration
+      slotMin += duration
+      while (slotMin >= 60) {
+        slotMin -= 60
+        slotHour++
+      }
+
+      if (daySlots.length >= 4) break
+    }
+
+    if (daySlots.length > 0) {
+      result.push(...daySlots.slice(0, 4))
+      workingDaysFound++
+    }
+  }
+
+  return result
 }
 
 export async function getOrCreateBot(plainToken: string, businessId: string): Promise<Bot> {
@@ -130,7 +227,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       // Notify owner, not client — client gets generic fallback
       const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
         ?.notification_telegram_id
-      if (notifId) {
+      if (notifId && notifId !== telegramUserId.toString()) {
         const plainToken = decryptToken(business.telegram_bot_token!)
         const reason = trialExpiredByDate ? 'истёк пробный период' : 'подписка отменена/истекла'
         fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
@@ -174,7 +271,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       // Notify owner silently — client gets generic fallback, no mention of limits
       const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
         ?.notification_telegram_id
-      if (notifId) {
+      if (notifId && notifId !== telegramUserId.toString()) {
         const plainToken = decryptToken(business.telegram_bot_token!)
         const reason = isTrial
           ? `исчерпан лимит пробного периода (${subscription.messages_used}/${subscription.messages_limit} сообщений)`
@@ -291,6 +388,22 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       return `- ${time}${svc?.name ? ` (${svc.name})` : ''}`
     })
 
+    // Generate available slots for the next 14 days
+    const bizSettings = business.settings as BusinessSettings | null
+    const workingHours = bizSettings?.working_hours
+    const bookedSlotsRaw = (upcomingBookings ?? []).map((b) => ({ scheduled_at: b.scheduled_at }))
+
+    // Determine service duration from first service or default 60
+    const firstService = services && services.length > 0 ? (services as Service[])[0] : null
+    const serviceDuration = firstService?.duration_minutes ?? 60
+
+    const availableSlots = workingHours
+      ? generateAvailableSlots(workingHours, bookedSlotsRaw, tz, serviceDuration)
+      : []
+
+    // Client name: prefer preferred_name, then first_name
+    const clientName = client.preferred_name || client.first_name || null
+
     let reply: string
 
     // Step 8: Call AI
@@ -303,10 +416,13 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
           masters: (masters as Master[]) ?? [],
           knowledgeItems: (knowledgeItems as KnowledgeItem[]) ?? [],
           bookedSlots,
+          clientName,
+          availableSlots,
         },
         ((history as Message[]) ?? []).reverse(),
         ctx.message.text,
-        client.id
+        client.id,
+        clientName
       )
 
       reply = result.reply
@@ -319,13 +435,13 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       const notifId = (
         business.settings as { notification_telegram_id?: string | null } | null
       )?.notification_telegram_id
-      if (notifId && (result.bookingCreated || result.intent === 'booking')) {
-        const clientName =
+      if (notifId && notifId !== telegramUserId.toString() && (result.bookingCreated || result.intent === 'booking')) {
+        const clientDisplayName =
           [client.first_name, client.last_name].filter(Boolean).join(' ') ||
           (ctx.from?.username ? `@${ctx.from.username}` : 'Клиент')
         const notifText = result.bookingCreated
-          ? `📅 Новая заявка на запись!\n👤 ${clientName}\n💬 «${ctx.message.text}»\n\nОткройте панель для подтверждения.`
-          : `💬 Клиент интересуется записью:\n👤 ${clientName}\n💬 «${ctx.message.text}»`
+          ? `📅 Новая заявка на запись!\n👤 ${clientDisplayName}\n💬 «${ctx.message.text}»\n\nОткройте панель для подтверждения.`
+          : `💬 Клиент интересуется записью:\n👤 ${clientDisplayName}\n💬 «${ctx.message.text}»`
         fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

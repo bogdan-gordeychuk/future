@@ -25,7 +25,7 @@ const CREATE_BOOKING_TOOL = {
       },
       master_name: {
         type: 'string',
-        description: 'Имя мастера (если клиент указал). Оставь пустым если не указан.',
+        description: 'Имя мастера. Обязательно если в бизнесе несколько мастеров.',
       },
       preferred_datetime: {
         type: 'string',
@@ -40,11 +40,24 @@ const CREATE_BOOKING_TOOL = {
   },
 }
 
+const SAVE_CLIENT_NAME_TOOL = {
+  name: 'save_client_name',
+  description: 'Сохрани имя клиента когда он представился',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      name: { type: 'string', description: 'Имя как представился клиент' }
+    },
+    required: ['name']
+  }
+}
+
 export async function processMessage(
   businessCtx: BusinessContext,
   history: Message[],
   userMessage: string,
-  clientId: string
+  clientId: string,
+  clientName: string | null
 ): Promise<AIResponse> {
   const systemPrompt = buildSystemPrompt(businessCtx)
 
@@ -61,14 +74,36 @@ export async function processMessage(
     max_tokens: 500,
     system: systemPrompt,
     messages,
-    tools: [CREATE_BOOKING_TOOL],
+    tools: [CREATE_BOOKING_TOOL, SAVE_CLIENT_NAME_TOOL],
     tool_choice: { type: 'auto' },
   })
 
   const tokensUsed = response.usage.input_tokens + response.usage.output_tokens
 
-  // Check if AI wants to create a booking
+  // Check if AI wants to use a tool
   const toolUse = response.content.find((b) => b.type === 'tool_use')
+
+  if (toolUse && toolUse.type === 'tool_use' && toolUse.name === 'save_client_name') {
+    const input = toolUse.input as { name: string }
+    const name = input.name
+
+    try {
+      const supabase = await createServiceClient()
+      await supabase
+        .from('clients')
+        .update({ preferred_name: name })
+        .eq('id', clientId)
+    } catch {
+      // Non-critical: log but don't fail
+    }
+
+    return {
+      reply: `Приятно познакомиться, ${name}! Чем могу помочь?`,
+      intent: 'other',
+      tokensUsed,
+    }
+  }
+
   if (toolUse && toolUse.type === 'tool_use' && toolUse.name === 'create_booking') {
     const input = toolUse.input as {
       service_name: string
@@ -77,13 +112,22 @@ export async function processMessage(
       notes?: string
     }
 
-    const bookingCreated = await createPendingBooking(businessCtx, clientId, input)
+    const tz =
+      (businessCtx.business.settings as { timezone?: string } | null)?.timezone || 'Europe/Moscow'
 
-    const reply = bookingCreated
-      ? `Отлично! Заявка на «${input.service_name}» принята. Ожидайте подтверждения от администратора — они свяжутся с вами в ближайшее время. 🗓`
-      : `Хотел бы записать вас на «${input.service_name}», но возникла техническая ошибка. Пожалуйста, напишите нам напрямую или попробуйте позже.`
+    const bookingResult = await createPendingBooking(businessCtx, clientId, input)
 
-    return { reply, intent: 'booking', tokensUsed, bookingCreated }
+    let reply: string
+    if (bookingResult.success) {
+      reply = `Записал! ${input.service_name} — ${formatDateTime(input.preferred_datetime, tz)}. Ждём вас! Чтобы отменить — напишите "отменить запись".`
+    } else if (bookingResult.reason === 'slot_taken') {
+      const slots = businessCtx.availableSlots ?? []
+      reply = `К сожалению, это время только что заняли. Вот свободные окна:\n${slots.slice(0, 4).join('\n')}`
+    } else {
+      reply = `Хотел бы записать вас на «${input.service_name}», но возникла техническая ошибка. Пожалуйста, напишите нам напрямую или попробуйте позже.`
+    }
+
+    return { reply, intent: 'booking', tokensUsed, bookingCreated: bookingResult.success }
   }
 
   // Regular text response
@@ -94,11 +138,26 @@ export async function processMessage(
   return { reply, intent, tokensUsed }
 }
 
+function formatDateTime(iso: string, tz: string): string {
+  try {
+    return new Date(iso).toLocaleString('ru-RU', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: tz,
+    })
+  } catch {
+    return iso
+  }
+}
+
 async function createPendingBooking(
   ctx: BusinessContext,
   clientId: string,
   input: { service_name: string; master_name?: string; preferred_datetime: string; notes?: string }
-): Promise<boolean> {
+): Promise<{ success: boolean; reason?: string }> {
   try {
     const supabase = await createServiceClient()
 
@@ -123,7 +182,7 @@ async function createPendingBooking(
     try {
       scheduledAt = new Date(input.preferred_datetime).toISOString()
     } catch {
-      return false
+      return { success: false }
     }
 
     const { error } = await supabase.from('bookings').insert({
@@ -134,13 +193,20 @@ async function createPendingBooking(
       scheduled_at: scheduledAt,
       duration_minutes: service?.duration_minutes ?? 60,
       price_kopecks: service?.price_kopecks ?? 0,
-      status: 'pending',
+      status: 'confirmed',
       notes: input.notes ?? null,
     })
 
-    return !error
+    if (error) {
+      if (error.code === '23505') {
+        return { success: false, reason: 'slot_taken' }
+      }
+      return { success: false }
+    }
+
+    return { success: true }
   } catch {
-    return false
+    return { success: false }
   }
 }
 

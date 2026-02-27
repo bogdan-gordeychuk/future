@@ -11,10 +11,12 @@ export interface BusinessContext {
   masters: Master[]
   knowledgeItems: KnowledgeItem[]
   bookedSlots?: string[] // formatted busy slots for next 7 days
+  clientName?: string | null
+  availableSlots?: string[]
 }
 
 export function buildSystemPrompt(ctx: BusinessContext): string {
-  const { business, services, masters, knowledgeItems, bookedSlots } = ctx
+  const { business, services, masters, knowledgeItems, bookedSlots, clientName, availableSlots } = ctx
 
   const servicesText = services.length
     ? services
@@ -49,18 +51,25 @@ export function buildSystemPrompt(ctx: BusinessContext): string {
       return `${DAY_NAMES[day] ?? day}: ${wd.start}–${wd.end}`
     })
     if (lines.length > 0) {
-      workingHoursText = `\nРЕЖИМ РАБОТЫ:\n${lines.join('\n')}\nНе предлагай время вне рабочих часов. Если клиент называет нерабочее время — вежливо скажи когда работаем.\n`
+      workingHoursText = `\nРЕЖИМ РАБОТЫ:\nСтрого соблюдай РЕЖИМ РАБОТЫ. Называй ТОЛЬКО часы из таблицы ниже. Не придумывай другой информации о расписании.\n${lines.join('\n')}\nНе предлагай время вне рабочих часов. Если клиент называет нерабочее время — вежливо скажи когда работаем.\n`
     }
   }
+
+  const availableSlotsText = availableSlots && availableSlots.length
+    ? `\nДОСТУПНЫЕ ОКНА:\n${availableSlots.join('\n')}\nПри вопросе о времени — показывай нумерованным списком. Когда клиент выбирает — вызывай create_booking.\n`
+    : ''
 
   return `Ты — AI-ассистент записи для бизнеса "${business.name}". Отвечаешь клиентам в Telegram.
 Сейчас: ${now} (часовой пояс бизнеса).
 
 ТВОЯ ЗАДАЧА:
 1. Отвечать на вопросы об услугах, ценах, мастерах и расписании
-2. Помогать клиентам записаться: выяснить услугу, мастера (если нужно) и удобное время
-3. Когда клиент указал услугу И время — вызвать инструмент create_booking
-4. Быть вежливым, кратким и по делу
+2. Помогать клиентам записаться. Уточнять ПО ПОРЯДКУ:
+   а) услугу (если не указана)
+   б) мастера (если мастеров БОЛЬШЕ ОДНОГО — спроси, покажи нумерованный список)
+   в) время из ДОСТУПНЫХ ОКОН
+   Вызывай create_booking ТОЛЬКО когда а+б+в уточнены.
+3. Быть вежливым, кратким и по делу
 
 БИЗНЕС: ${business.name}
 ${business.description ? `Описание: ${business.description}` : ''}
@@ -72,13 +81,15 @@ ${servicesText}
 
 МАСТЕРА:
 ${mastersText}
-${workingHoursText}${slotsText}
+${workingHoursText}${slotsText}${availableSlotsText}
 ${faqText ? `ЧАСТЫЕ ВОПРОСЫ:\n${faqText}\n` : ''}
 ПРАВИЛА:
 - Всегда отвечай на русском языке
 - Будь дружелюбным, но лаконичным (1-3 предложения)
-- Если клиент хочет записаться — уточни услугу и желаемое время, ПОТОМ вызови create_booking
-- После создания заявки объясни: "Ожидайте подтверждения администратора"
+- НЕ используй Markdown (звёздочки **, подчёркивания __, хэши ##) — они не рендерятся в Telegram. Пиши обычным текстом.
+- Если мастеров несколько — ВСЕГДА спрашивай к кому записать ДО предложения времени.
+- Если clientName передан — обращайся к клиенту по имени.
+- Если clientName = null — при первом уместном моменте спроси "Как к вам обращаться?" и вызови save_client_name.
 - Не придумывай информацию которой нет — скажи что уточнишь у администратора
-- Не обсуждай темы не связанные с бизнесом`
+- Не обсуждай темы не связанные с бизнесом${clientName ? `\n\nИМЯ КЛИЕНТА: ${clientName}` : ''}`
 }
