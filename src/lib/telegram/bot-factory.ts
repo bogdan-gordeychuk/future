@@ -29,6 +29,8 @@ export async function getOrCreateBot(plainToken: string, businessId: string): Pr
 
   const bot = new Bot(plainToken)
   setupHandlers(bot, businessId, plainToken)
+  // GrammY requires bot.init() before webhookCallback can parse commands
+  await bot.init()
   botCache.set(businessId, bot)
   return bot
 }

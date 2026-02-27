@@ -10,14 +10,17 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
+  const businessId = req.nextUrl.searchParams.get('id')
+  const hasSecret = !!req.headers.get('x-telegram-bot-api-secret-token')
+  console.log(`[webhook] POST id=${businessId} hasSecret=${hasSecret}`)
+
   // Verify secret token
   const secret = req.headers.get('x-telegram-bot-api-secret-token')
   if (secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+    console.log(`[webhook] secret mismatch for id=${businessId}`)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Extract business ID from URL: /api/telegram/webhook?id=BUSINESS_UUID
-  const businessId = req.nextUrl.searchParams.get('id')
   if (!businessId) {
     return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   }
