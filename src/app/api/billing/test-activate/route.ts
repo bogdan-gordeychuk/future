@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
-// DEV ONLY — simulates a payment.succeeded webhook without YooKassa
-// Usage: GET /api/billing/test-activate?business_id=UUID
+// TEST ONLY — simulates a payment.succeeded webhook without YooKassa
+// Usage: GET /api/billing/test-activate?business_id=UUID&secret=TEST_PAYMENT_SECRET
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json({ error: 'Not available in production' }, { status: 403 })
+  const testSecret = process.env.TEST_PAYMENT_SECRET
+  const providedSecret = req.nextUrl.searchParams.get('secret')
+
+  if (!testSecret || providedSecret !== testSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
   const businessId = req.nextUrl.searchParams.get('business_id')
