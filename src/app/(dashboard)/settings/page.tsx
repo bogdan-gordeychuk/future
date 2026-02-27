@@ -1,20 +1,13 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 import { maskToken } from '@/lib/crypto'
 import SettingsForm from './_form'
-import type { Business } from '@/types/database'
 
 export default async function SettingsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
   if (!user) redirect('/login')
 
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single<Business>()
-
+  const business = await getBusiness(user.id)
   if (!business) redirect('/dashboard')
 
   return (

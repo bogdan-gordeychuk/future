@@ -1,21 +1,17 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 import { AddServiceForm, ServiceRow } from './_form'
 import type { Service } from '@/types/database'
 
 export default async function ServicesPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
   if (!user) redirect('/login')
 
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('id')
-    .eq('owner_id', user.id)
-    .single()
-
+  const business = await getBusiness(user.id)
   if (!business) redirect('/dashboard')
 
+  const supabase = await createClient()
   const { data: services } = await supabase
     .from('services')
     .select('*')

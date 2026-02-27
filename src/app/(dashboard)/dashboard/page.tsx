@@ -1,17 +1,13 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
   if (!user) redirect('/login')
 
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('id, name, telegram_bot_token')
-    .eq('owner_id', user.id)
-    .single()
+  const business = await getBusiness(user.id)
 
   if (!business) {
     return (
@@ -21,6 +17,7 @@ export default async function DashboardPage() {
     )
   }
 
+  const supabase = await createClient()
   const today = new Date().toISOString().slice(0, 10)
   const monthStart = new Date().toISOString().slice(0, 8) + '01'
 
