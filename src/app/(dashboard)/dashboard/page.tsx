@@ -3,6 +3,12 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 
+const CHECK = (
+  <svg className="w-3 h-3 text-green-600" viewBox="0 0 12 12" fill="none">
+    <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
 export default async function DashboardPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
@@ -25,6 +31,7 @@ export default async function DashboardPage() {
     { count: bookingsToday },
     { count: totalClients },
     { count: messagesMonth },
+    { count: servicesCount },
   ] = await Promise.all([
     supabase
       .from('bookings')
@@ -41,7 +48,23 @@ export default async function DashboardPage() {
       .eq('business_id', business.id)
       .eq('role', 'user')
       .gte('created_at', monthStart),
+    supabase
+      .from('services')
+      .select('*', { count: 'exact', head: true })
+      .eq('business_id', business.id)
+      .eq('is_active', true),
   ])
+
+  const bizSettings = business.settings as { notification_telegram_id?: string | null } | null
+  const setupSteps = [
+    { label: 'Бизнес создан', done: true },
+    { label: 'Добавьте хотя бы одну услугу', done: (servicesCount ?? 0) > 0, href: '/services' },
+    { label: 'Сохраните токен Telegram-бота', done: !!business.telegram_bot_token, href: '/settings' },
+    { label: 'Подключите webhook', done: !!business.telegram_bot_username, href: '/settings' },
+    { label: 'Укажите Telegram ID для уведомлений', done: !!bizSettings?.notification_telegram_id, href: '/settings' },
+  ]
+  const setupDone = setupSteps.every((s) => s.done)
+  const setupCount = setupSteps.filter((s) => s.done).length
 
   return (
     <div>
@@ -54,26 +77,38 @@ export default async function DashboardPage() {
         <StatCard label="Сообщений за месяц" value={messagesMonth ?? 0} />
       </div>
 
-      {!business.telegram_bot_token && (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 p-6">
-          <p className="text-sm font-medium text-amber-900">Бот не подключён</p>
-          <p className="mt-1 text-sm text-amber-700">
-            Добавьте токен Telegram-бота в настройках, чтобы начать принимать записи.
-          </p>
-          <Link
-            href="/settings"
-            className="mt-4 inline-block rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-          >
-            Настроить бота
-          </Link>
+      {!setupDone && (
+        <div className="rounded-xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-medium text-zinc-900">Настройка бота</p>
+            <span className="text-xs text-zinc-400">{setupCount} / {setupSteps.length}</span>
+          </div>
+          <div className="space-y-3">
+            {setupSteps.map((step) => (
+              <div key={step.label} className="flex items-center gap-3">
+                <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${step.done ? 'bg-green-100' : 'bg-zinc-100'}`}>
+                  {step.done ? CHECK : <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />}
+                </span>
+                {step.href && !step.done ? (
+                  <Link href={step.href} className="text-sm text-zinc-600 hover:text-zinc-900 underline underline-offset-2">
+                    {step.label}
+                  </Link>
+                ) : (
+                  <span className={`text-sm ${step.done ? 'text-zinc-900' : 'text-zinc-400'}`}>{step.label}</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {business.telegram_bot_token && (
+      {setupDone && (
         <div className="rounded-xl bg-green-50 border border-green-200 p-6">
-          <p className="text-sm font-medium text-green-900">Бот подключён</p>
+          <p className="text-sm font-medium text-green-900">
+            {business.telegram_bot_username ? `Бот @${business.telegram_bot_username} работает` : 'Бот настроен и работает'}
+          </p>
           <p className="mt-1 text-sm text-green-700">
-            AI-ассистент отвечает клиентам в Telegram.
+            AI-ассистент принимает сообщения и помогает клиентам записаться.
           </p>
         </div>
       )}

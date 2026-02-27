@@ -109,6 +109,19 @@ export async function connectWebhook(businessId: string): Promise<{ error: strin
   const data = await res.json()
   if (!data.ok) return { error: `Telegram: ${data.description}`, ok: false }
 
+  // Save bot username for status display
+  try {
+    const getMeRes = await fetch(`https://api.telegram.org/bot${plainToken}/getMe`)
+    const getMeData = await getMeRes.json()
+    if (getMeData.ok) {
+      await serviceClient
+        .from('businesses')
+        .update({ telegram_bot_username: getMeData.result.username ?? null })
+        .eq('id', businessId)
+    }
+  } catch {}
+
   revalidatePath('/settings')
+  revalidatePath('/dashboard')
   return { error: null, ok: true }
 }

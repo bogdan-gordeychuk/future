@@ -1,4 +1,9 @@
-import type { Business, Service, Master, KnowledgeItem } from '@/types/database'
+import type { Business, Service, Master, KnowledgeItem, BusinessSettings, WorkingHoursDay } from '@/types/database'
+
+const DAY_NAMES: Record<string, string> = {
+  mon: 'Понедельник', tue: 'Вторник', wed: 'Среда', thu: 'Четверг',
+  fri: 'Пятница', sat: 'Суббота', sun: 'Воскресенье',
+}
 
 export interface BusinessContext {
   business: Business
@@ -29,10 +34,24 @@ export function buildSystemPrompt(ctx: BusinessContext): string {
     ? `\nЗАНЯТОЕ ВРЕМЯ (следующие 7 дней):\n${bookedSlots.join('\n')}\nНе предлагай эти слоты клиентам.\n`
     : ''
 
-  const tz = (business.settings as { timezone?: string } | null)?.timezone || 'Europe/Moscow'
+  const bizSettings = business.settings as BusinessSettings | null
+  const tz = bizSettings?.timezone || 'Europe/Moscow'
   const now = new Date().toLocaleString('ru-RU', {
     weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: tz,
   })
+
+  const workingHours = bizSettings?.working_hours
+  let workingHoursText = ''
+  if (workingHours) {
+    const lines = Object.entries(workingHours).map(([day, h]) => {
+      const wd = h as WorkingHoursDay
+      if (!wd.enabled) return `${DAY_NAMES[day] ?? day}: выходной`
+      return `${DAY_NAMES[day] ?? day}: ${wd.start}–${wd.end}`
+    })
+    if (lines.length > 0) {
+      workingHoursText = `\nРЕЖИМ РАБОТЫ:\n${lines.join('\n')}\nНе предлагай время вне рабочих часов. Если клиент называет нерабочее время — вежливо скажи когда работаем.\n`
+    }
+  }
 
   return `Ты — AI-ассистент записи для бизнеса "${business.name}". Отвечаешь клиентам в Telegram.
 Сейчас: ${now} (часовой пояс бизнеса).
@@ -53,7 +72,7 @@ ${servicesText}
 
 МАСТЕРА:
 ${mastersText}
-${slotsText}
+${workingHoursText}${slotsText}
 ${faqText ? `ЧАСТЫЕ ВОПРОСЫ:\n${faqText}\n` : ''}
 ПРАВИЛА:
 - Всегда отвечай на русском языке

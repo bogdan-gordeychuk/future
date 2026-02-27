@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { updateBusiness, saveBotToken, connectWebhook } from '@/lib/actions/business'
 
@@ -17,6 +18,8 @@ interface Props {
   notificationTelegramId: string
   hasToken: boolean
   maskedToken: string | null
+  webhookConnected: boolean
+  botUsername: string | null
 }
 
 const TIMEZONES = [
@@ -34,8 +37,9 @@ const TIMEZONES = [
 ]
 
 export default function SettingsForm({
-  businessId, name, description, phone, address, city, timezone, notificationTelegramId, hasToken, maskedToken,
+  businessId, name, description, phone, address, city, timezone, notificationTelegramId, hasToken, maskedToken, webhookConnected, botUsername,
 }: Props) {
+  const router = useRouter()
   const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
   const [botState, botAction, botPending] = useActionState(saveBotToken, { error: null, success: false })
   const [connecting, setConnecting] = useState(false)
@@ -54,8 +58,12 @@ export default function SettingsForm({
   async function handleConnect() {
     setConnecting(true)
     const result = await connectWebhook(businessId)
-    if (result.ok) toast.success('Webhook подключён!')
-    else toast.error(result.error ?? 'Ошибка подключения')
+    if (result.ok) {
+      toast.success('Webhook подключён!')
+      router.refresh()
+    } else {
+      toast.error(result.error ?? 'Ошибка подключения')
+    }
     setConnecting(false)
   }
 
@@ -141,12 +149,21 @@ export default function SettingsForm({
         )}
 
         {hasToken && !replacing && (
-          <div className="flex gap-3 flex-wrap">
-            <button type="button" onClick={handleConnect} disabled={connecting}
-              className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
-              {connecting ? 'Подключение...' : 'Подключить webhook'}
-            </button>
-          </div>
+          <>
+            <div className="mb-4 flex items-center gap-2">
+              <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${webhookConnected ? 'bg-green-500' : 'bg-zinc-300'}`} />
+              {webhookConnected
+                ? <span className="text-sm text-green-700">Бот {botUsername ? `@${botUsername}` : ''} подключён</span>
+                : <span className="text-sm text-zinc-400">Webhook не подключён — бот не отвечает клиентам</span>
+              }
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              <button type="button" onClick={handleConnect} disabled={connecting}
+                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
+                {connecting ? 'Подключение...' : webhookConnected ? 'Переподключить webhook' : 'Подключить webhook'}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -27,6 +27,8 @@ export default async function SettingsPage() {
         notificationTelegramId={settings?.notification_telegram_id ?? ''}
         hasToken={!!business.telegram_bot_token}
         maskedToken={business.telegram_bot_token ? maskToken(business.telegram_bot_token) : null}
+        webhookConnected={!!business.telegram_bot_username}
+        botUsername={business.telegram_bot_username ?? null}
       />
     </div>
   )

@@ -49,9 +49,37 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         return
       }
 
-      const settings = business.settings as { welcome_message?: string }
-      const welcome =
-        settings?.welcome_message || `Привет! Я помощник ${business.name}. Чем могу помочь?`
+      const settings = business.settings as { welcome_message?: string } | null
+
+      // Custom welcome message takes priority
+      if (settings?.welcome_message) {
+        log(businessId, `/start: custom welcome to tgUser=${ctx.from?.id}`)
+        await ctx.reply(settings.welcome_message)
+        return
+      }
+
+      // Smart welcome: load active services to show in greeting
+      const { data: services } = await supabase
+        .from('services')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .order('sort_order')
+        .limit(10)
+
+      let welcome = `Привет! Я виртуальный администратор — ${business.name}.`
+
+      if (services && services.length > 0) {
+        welcome += '\n\nНаши услуги:\n'
+        welcome += (services as Service[])
+          .map((s) => `• ${s.name} — ${Math.round(s.price_kopecks / 100)} ₽, ${s.duration_minutes} мин`)
+          .join('\n')
+        welcome += '\n\nНапишите что вас интересует или скажите «хочу записаться» — я помогу подобрать удобное время.'
+      } else {
+        welcome += '\n\nНапишите что вас интересует — я отвечу на ваши вопросы и помогу записаться.'
+      }
+
+      log(businessId, `/start: smart welcome to tgUser=${ctx.from?.id} services=${services?.length ?? 0}`)
       await ctx.reply(welcome)
     } catch (err) {
       logError(businessId, '/start unhandled error:', err)
