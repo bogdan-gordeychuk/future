@@ -3,6 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { encryptToken, decryptToken } from '@/lib/crypto'
+import { WorkingHoursDay, BusinessSettings } from '@/types/database'
+
+type WorkingHoursKey = keyof BusinessSettings['working_hours']
+const WORKING_HOURS_DAYS: WorkingHoursKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
 export async function updateBusiness(
   _prev: { error: string | null; success: boolean },
@@ -18,6 +22,15 @@ export async function updateBusiness(
   const notifId = (formData.get('notification_telegram_id') as string)?.trim() || null
   const timezone = (formData.get('timezone') as string)?.trim() || null
 
+  // Parse working_hours from FormData
+  const workingHoursEntries = WORKING_HOURS_DAYS.map(day => {
+    const start = (formData.get(`working_hours_${day}_start`) as string | null) ?? '09:00'
+    const end = (formData.get(`working_hours_${day}_end`) as string | null) ?? '21:00'
+    const enabled = formData.get(`working_hours_${day}_enabled`) === '1'
+    return [day, { start, end, enabled } satisfies WorkingHoursDay] as const
+  })
+  const working_hours = Object.fromEntries(workingHoursEntries) as BusinessSettings['working_hours']
+
   // Merge fields into existing settings JSONB
   const { data: biz } = await supabase
     .from('businesses')
@@ -28,6 +41,7 @@ export async function updateBusiness(
     ...(biz?.settings as object ?? {}),
     notification_telegram_id: notifId,
     ...(timezone ? { timezone } : {}),
+    working_hours,
   }
 
   const { error } = await supabase

@@ -1,7 +1,18 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 import { maskToken } from '@/lib/crypto'
+import { BusinessSettings } from '@/types/database'
 import SettingsForm from './_form'
+
+const DEFAULT_WORKING_HOURS: BusinessSettings['working_hours'] = {
+  mon: { start: '09:00', end: '21:00', enabled: true },
+  tue: { start: '09:00', end: '21:00', enabled: true },
+  wed: { start: '09:00', end: '21:00', enabled: true },
+  thu: { start: '09:00', end: '21:00', enabled: true },
+  fri: { start: '09:00', end: '21:00', enabled: true },
+  sat: { start: '09:00', end: '21:00', enabled: false },
+  sun: { start: '09:00', end: '21:00', enabled: false },
+}
 
 export default async function SettingsPage() {
   const user = await getCurrentUser()
@@ -10,7 +21,9 @@ export default async function SettingsPage() {
   const business = await getBusiness(user.id)
   if (!business) redirect('/dashboard')
 
-  const settings = business.settings as { notification_telegram_id?: string | null; timezone?: string } | null
+  const settings = business.settings as BusinessSettings | null
+
+  const workingHours = settings?.working_hours ?? DEFAULT_WORKING_HOURS
 
   return (
     <div>
@@ -25,6 +38,7 @@ export default async function SettingsPage() {
         city={business.city ?? ''}
         timezone={settings?.timezone ?? ''}
         notificationTelegramId={settings?.notification_telegram_id ?? ''}
+        workingHours={workingHours}
         hasToken={!!business.telegram_bot_token}
         maskedToken={business.telegram_bot_token ? maskToken(business.telegram_bot_token) : null}
         webhookConnected={!!business.telegram_bot_username}
