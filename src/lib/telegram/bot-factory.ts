@@ -2,15 +2,16 @@ import { Bot } from 'grammy'
 import { createServiceClient } from '@/lib/supabase/server'
 import { processMessage } from '@/lib/ai/engine'
 import { checkRateLimit } from './rate-limiter'
+import { decryptToken } from '@/lib/crypto'
 import type { Business, Service, Master, KnowledgeItem, Client, Message } from '@/types/database'
 
 // Cache bot instances: businessId → Bot
 const botCache = new Map<string, Bot>()
 
-const TRIAL_EXPIRED_MSG =
-  'Пробный период закончился. Чтобы продолжить пользоваться ботом, оформите подписку в личном кабинете.'
-const PAID_LIMIT_MSG =
-  'К сожалению, лимит AI-сообщений на этот месяц исчерпан. Для записи напишите нам напрямую.'
+// Fallback message shown to client when AI is unavailable (limits, errors)
+// Client does NOT know it's a limit issue — this is intentional
+const CLIENT_FALLBACK_MSG =
+  'Добрый день! Я передам ваше сообщение администратору, он свяжется с вами в ближайшее время.'
 
 // Structured logging helpers
 function log(bizId: string, msg: string, data?: unknown) {
@@ -96,11 +97,22 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
 
     if (trialExpiredByDate || subExpired) {
       log(businessId, `access blocked: trialByDate=${trialExpiredByDate} subExpired=${subExpired}`)
-      await ctx.reply(
-        trialExpiredByDate
-          ? TRIAL_EXPIRED_MSG
-          : 'Доступ к боту приостановлен. Пожалуйста, свяжитесь с владельцем.'
-      )
+      // Notify owner, not client — client gets generic fallback
+      const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
+        ?.notification_telegram_id
+      if (notifId) {
+        const plainToken = decryptToken(business.telegram_bot_token!)
+        const reason = trialExpiredByDate ? 'истёк пробный период' : 'подписка отменена/истекла'
+        fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: notifId,
+            text: `⚠️ Бот не может ответить клиенту — ${reason}.\nСообщение клиента: «${ctx.message.text}»\n\nОформите подписку в личном кабинете: ${process.env.NEXT_PUBLIC_APP_URL}/billing`,
+          }),
+        }).catch(() => {})
+      }
+      await ctx.reply(CLIENT_FALLBACK_MSG)
       return
     }
 
@@ -129,7 +141,24 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         businessId,
         `limit exceeded: plan=${subscription.plan} used=${subscription.messages_used}/${subscription.messages_limit}`
       )
-      await ctx.reply(isTrial ? TRIAL_EXPIRED_MSG : PAID_LIMIT_MSG)
+      // Notify owner silently — client gets generic fallback, no mention of limits
+      const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
+        ?.notification_telegram_id
+      if (notifId) {
+        const plainToken = decryptToken(business.telegram_bot_token!)
+        const reason = isTrial
+          ? `исчерпан лимит пробного периода (${subscription.messages_used}/${subscription.messages_limit} сообщений)`
+          : `исчерпан месячный лимит сообщений (${subscription.messages_used}/${subscription.messages_limit})`
+        fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: notifId,
+            text: `⚠️ AI-ассистент отключён — ${reason}.\nСообщение клиента: «${ctx.message.text}»\n\n${isTrial ? `Оформите подписку: ${process.env.NEXT_PUBLIC_APP_URL}/billing` : `Обновите подписку: ${process.env.NEXT_PUBLIC_APP_URL}/billing`}`,
+          }),
+        }).catch(() => {})
+      }
+      await ctx.reply(CLIENT_FALLBACK_MSG)
       return
     }
 
