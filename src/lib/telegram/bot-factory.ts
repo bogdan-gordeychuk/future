@@ -43,6 +43,23 @@ function logError(bizId: string, msg: string, err: unknown) {
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 type DayKey = typeof DAY_KEYS[number]
 
+/**
+ * Convert a local date+time in the given timezone to a UTC timestamp (ms).
+ * Uses a round-trip through toLocaleString to determine the UTC offset.
+ */
+function localToUtcMs(dateStr: string, hour: number, minute: number, tz: string): number {
+  const iso = `${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`
+  // Treat the iso string as UTC first (probe)
+  const probe = new Date(iso + 'Z')
+  // Get what local time that UTC instant corresponds to in the target tz
+  const localStr = probe.toLocaleString('sv-SE', { timeZone: tz }) // sv-SE → "YYYY-MM-DD HH:MM:SS"
+  const localProbe = new Date(localStr.replace(' ', 'T') + 'Z')
+  // offset = how many ms the probe UTC is ahead of the tz-local time
+  const offset = probe.getTime() - localProbe.getTime()
+  // The actual UTC ms for the desired local time is probe + offset
+  return probe.getTime() + offset
+}
+
 function generateAvailableSlots(
   workingHours: BusinessSettings['working_hours'],
   bookedSlotsRaw: Array<{ scheduled_at: string }>,
@@ -90,15 +107,8 @@ function generateAvailableSlots(
       slotHour < endHour ||
       (slotHour === endHour && slotMin < endMin)
     ) {
-      // Build ISO string for this slot in the business timezone
-      const slotDateStr = `${dateStr}T${String(slotHour).padStart(2, '0')}:${String(slotMin).padStart(2, '0')}:00`
-      // Parse as local time in tz
-      const slotDate = new Date(
-        new Date(slotDateStr).toLocaleString('en-US', { timeZone: tz })
-      )
-      // Actually we need to create the date properly
-      // Use a different approach: create UTC time from the tz-local time
-      const slotMs = new Date(`${dateStr}T${String(slotHour).padStart(2, '0')}:${String(slotMin).padStart(2, '0')}:00`).getTime()
+      // Convert local time in business timezone to UTC ms
+      const slotMs = localToUtcMs(dateStr, slotHour, slotMin, tz)
 
       // Check if slot conflicts with booked times (±30 min)
       const isBooked = bookedTimes.some(

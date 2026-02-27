@@ -9,6 +9,22 @@ export const runtime = 'nodejs'
 // Disable body parsing — grammy reads it directly
 export const dynamic = 'force-dynamic'
 
+// In-memory deduplication: key = `${businessId}:${updateId}`, value = timestamp processed
+const processedUpdates = new Map<string, number>()
+const DEDUP_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+function isDuplicateUpdate(businessId: string, updateId: number): boolean {
+  const key = `${businessId}:${updateId}`
+  const now = Date.now()
+  // Evict old entries
+  for (const [k, ts] of processedUpdates) {
+    if (now - ts > DEDUP_TTL_MS) processedUpdates.delete(k)
+  }
+  if (processedUpdates.has(key)) return true
+  processedUpdates.set(key, now)
+  return false
+}
+
 export async function POST(req: NextRequest) {
   const businessId = req.nextUrl.searchParams.get('id')
   const hasSecret = !!req.headers.get('x-telegram-bot-api-secret-token')
@@ -26,6 +42,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Read body once for idempotency check, then reconstruct request for grammy
+    const bodyText = await req.text()
+    let updateId: number | undefined
+    try {
+      const update = JSON.parse(bodyText)
+      updateId = update?.update_id
+    } catch {
+      // If body is not valid JSON, let grammy handle the error
+    }
+
+    // Idempotency check: skip duplicate updates (Telegram retries on timeout)
+    if (updateId !== undefined && isDuplicateUpdate(businessId, updateId)) {
+      console.log(`[webhook] duplicate update_id=${updateId} for businessId=${businessId}, skipping`)
+      return NextResponse.json({ ok: true })
+    }
+
     const supabase = await createServiceClient()
 
     const { data: business } = await supabase
@@ -42,7 +74,13 @@ export async function POST(req: NextRequest) {
     const plainToken = decryptToken(business.telegram_bot_token)
     const bot = await getOrCreateBot(plainToken, business.id)
     const handler = webhookCallback(bot, 'std/http')
-    return handler(req)
+    // Reconstruct request with the already-read body so grammy can parse it
+    const newReq = new NextRequest(req.url, {
+      method: req.method,
+      headers: req.headers,
+      body: bodyText,
+    })
+    return handler(newReq)
   } catch (err) {
     const errInfo = err instanceof Error ? { message: err.message, stack: err.stack } : err
     console.error(`[webhook] Error processing update for businessId=${businessId}:`, errInfo)

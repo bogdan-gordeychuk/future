@@ -28,11 +28,11 @@ export default function LandingPage() {
             14 дней или 400 сообщений бесплатно · без карты
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-zinc-900 leading-tight mb-5">
-            Ваш Telegram-бот,<br className="hidden sm:block" /> который записывает клиентов
+            Перестаньте отвечать на «когда можно записаться?» в 23:00
           </h1>
           <p className="text-lg text-zinc-500 mb-4 max-w-xl mx-auto">
-            Подключите бота — ВИКА ответит на вопросы, запишет клиента и напомнит о визите.
-            Всё это без вашего участия, 24/7.
+            ВИКА отвечает клиентам 24/7, записывает и напоминает о визите.
+            Вы занимаетесь работой — не перепиской.
           </p>
           <p className="text-sm text-zinc-400 mb-10">
             Клиент пишет «хочу записаться» → бот уточняет услугу и время → заявка приходит вам в Telegram
@@ -60,7 +60,7 @@ export default function LandingPage() {
             {[
               'Барбершопы', 'Nail-студии', 'Массажные кабинеты',
               'Репетиторы', 'Фотографы', 'Тренеры',
-              'Салоны красоты', 'Косметологи', 'Психологи',
+              'Салоны красоты', 'Косметологи',
             ].map((name) => (
               <span key={name}
                 className="rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-sm text-zinc-600">
