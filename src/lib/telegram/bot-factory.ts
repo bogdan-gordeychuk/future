@@ -1,4 +1,4 @@
-import { Bot } from 'grammy'
+import { Bot, type Context } from 'grammy'
 import { createServiceClient } from '@/lib/supabase/server'
 import { processMessage } from '@/lib/ai/engine'
 import { checkRateLimit } from './rate-limiter'
@@ -7,6 +7,17 @@ import type { Business, Service, Master, KnowledgeItem, Client, Message, Busines
 
 // Cache bot instances: businessId → Bot
 const botCache = new Map<string, Bot>()
+
+// BookingRow type for client self-cancellation feature
+interface BookingRow {
+  id: string
+  scheduled_at: string
+  status: string
+  service_name: string | null
+}
+
+// Cache of upcoming bookings per telegram user id (for cancellation flow)
+const userBookingsCache = new Map<number, BookingRow[]>()
 
 // Fallback message shown to client when AI is unavailable (limits, errors)
 // Client does NOT know it's a limit issue — this is intentional
@@ -482,6 +493,240 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     } catch (err) {
       logError(businessId, 'Telegram send reply error:', err)
     }
+  })
+
+  // ── C1: /mybookings command + "мои записи" text ──────────────────────────
+
+  async function handleMyBookings(ctx: Context) {
+    const telegramUserId = ctx.from?.id
+    if (!telegramUserId) return
+
+    const supabase = await createServiceClient()
+
+    // Look up client by telegram_user_id + business_id
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id, first_name, last_name')
+      .eq('business_id', businessId)
+      .eq('telegram_user_id', telegramUserId)
+      .single<{ id: string; first_name: string | null; last_name: string | null }>()
+
+    if (!client) {
+      await ctx.reply('У вас нет предстоящих записей.')
+      return
+    }
+
+    // Load next 5 upcoming bookings with service name
+    const { data: rows, error } = await supabase
+      .from('bookings')
+      .select('id, scheduled_at, status, services(name)')
+      .eq('business_id', businessId)
+      .eq('client_id', client.id)
+      .in('status', ['confirmed', 'pending'])
+      .gt('scheduled_at', new Date().toISOString())
+      .order('scheduled_at', { ascending: true })
+      .limit(5)
+
+    if (error) {
+      logError(businessId, 'DB error loading mybookings:', error)
+      await ctx.reply('Произошла ошибка. Попробуйте позже.')
+      return
+    }
+
+    if (!rows || rows.length === 0) {
+      userBookingsCache.delete(telegramUserId)
+      await ctx.reply('У вас нет предстоящих записей.')
+      return
+    }
+
+    // Map to BookingRow
+    const bookings: BookingRow[] = rows.map((r) => {
+      const svc = Array.isArray(r.services) ? r.services[0] : r.services
+      return {
+        id: r.id as string,
+        scheduled_at: r.scheduled_at as string,
+        status: r.status as string,
+        service_name: (svc as { name?: string } | null)?.name ?? null,
+      }
+    })
+
+    // Save to cache
+    userBookingsCache.set(telegramUserId, bookings)
+
+    // Format response
+    const lines = bookings.map((b, i) => {
+      const dt = new Date(b.scheduled_at).toLocaleString('ru-RU', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      const statusLabel = b.status === 'confirmed' ? 'подтверждено' : 'ожидает'
+      const svcPart = b.service_name ? ` — ${b.service_name}` : ''
+      return `${i + 1}. ${dt}${svcPart} (${statusLabel})`
+    })
+
+    const text =
+      'Ваши предстоящие записи:\n' +
+      lines.join('\n') +
+      "\n\nЧтобы отменить — напишите 'отменить 1' или 'отменить запись'"
+
+    await ctx.reply(text)
+  }
+
+  bot.command('mybookings', handleMyBookings)
+  bot.hears(/мои записи/i, handleMyBookings)
+
+  // ── C2: Cancellation handler ──────────────────────────────────────────────
+
+  bot.hears(/отменит[ьь]?\s*(\d+)?/i, async (ctx) => {
+    const telegramUserId = ctx.from?.id
+    if (!telegramUserId) return
+
+    const supabase = await createServiceClient()
+
+    // Look up client
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id, first_name, last_name')
+      .eq('business_id', businessId)
+      .eq('telegram_user_id', telegramUserId)
+      .single<{ id: string; first_name: string | null; last_name: string | null }>()
+
+    if (!client) {
+      await ctx.reply('У вас нет предстоящих записей.')
+      return
+    }
+
+    // Load bookings from cache or DB
+    let bookings = userBookingsCache.get(telegramUserId)
+
+    if (!bookings) {
+      const { data: rows, error } = await supabase
+        .from('bookings')
+        .select('id, scheduled_at, status, services(name)')
+        .eq('business_id', businessId)
+        .eq('client_id', client.id)
+        .in('status', ['confirmed', 'pending'])
+        .gt('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(5)
+
+      if (error) {
+        logError(businessId, 'DB error loading bookings for cancellation:', error)
+        await ctx.reply('Произошла ошибка. Попробуйте позже.')
+        return
+      }
+
+      if (!rows || rows.length === 0) {
+        await ctx.reply('У вас нет предстоящих записей.')
+        return
+      }
+
+      bookings = rows.map((r) => {
+        const svc = Array.isArray(r.services) ? r.services[0] : r.services
+        return {
+          id: r.id as string,
+          scheduled_at: r.scheduled_at as string,
+          status: r.status as string,
+          service_name: (svc as { name?: string } | null)?.name ?? null,
+        }
+      })
+      userBookingsCache.set(telegramUserId, bookings)
+    }
+
+    if (bookings.length === 0) {
+      await ctx.reply('У вас нет предстоящих записей.')
+      return
+    }
+
+    // Determine which booking to cancel
+    const matchText = ctx.message?.text ?? ''
+    const numMatch = matchText.match(/отменит[ьь]?\s*(\d+)/i)
+    const indexStr = numMatch ? numMatch[1] : null
+    const index = indexStr ? parseInt(indexStr, 10) - 1 : null
+
+    let bookingToCancel: BookingRow | null = null
+
+    if (bookings.length === 1) {
+      // Only one booking — cancel immediately
+      bookingToCancel = bookings[0]
+    } else if (index !== null && index >= 0 && index < bookings.length) {
+      // Number specified and valid
+      bookingToCancel = bookings[index]
+    } else {
+      // Multiple bookings, no valid number — show list and ask
+      const lines = bookings.map((b, i) => {
+        const dt = new Date(b.scheduled_at).toLocaleString('ru-RU', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        const svcPart = b.service_name ? ` — ${b.service_name}` : ''
+        return `${i + 1}. ${dt}${svcPart}`
+      })
+      await ctx.reply(
+        'Какую запись отменить?\n' +
+          lines.join('\n') +
+          "\n\nНапишите 'отменить 1', 'отменить 2' и т.д."
+      )
+      return
+    }
+
+    // Cancel the booking (security: only own bookings via client_id check)
+    const { error: cancelError } = await supabase
+      .from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', bookingToCancel.id)
+      .eq('client_id', client.id)
+
+    if (cancelError) {
+      logError(businessId, 'DB error cancelling booking:', cancelError)
+      await ctx.reply('Произошла ошибка при отмене. Попробуйте позже.')
+      return
+    }
+
+    // Remove from cache
+    userBookingsCache.delete(telegramUserId)
+
+    // Notify business owner
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('settings, telegram_bot_token')
+      .eq('id', businessId)
+      .single<{ settings: unknown; telegram_bot_token: string | null }>()
+
+    if (business) {
+      const notifId = (
+        business.settings as { notification_telegram_id?: string | null } | null
+      )?.notification_telegram_id
+
+      if (notifId && notifId !== telegramUserId.toString()) {
+        const clientDisplayName =
+          [client.first_name, client.last_name].filter(Boolean).join(' ') ||
+          (ctx.from?.username ? `@${ctx.from.username}` : 'Клиент')
+        const dt = new Date(bookingToCancel.scheduled_at).toLocaleString('ru-RU', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        const svcPart = bookingToCancel.service_name ?? 'услуга не указана'
+        const notifText = `❌ ${clientDisplayName} отменил запись: ${svcPart} — ${dt}`
+
+        fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: notifId, text: notifText }),
+        }).catch((err) => logError(businessId, 'Telegram cancellation notification error:', err))
+      }
+    }
+
+    await ctx.reply('Запись отменена. Будем рады видеть вас снова!')
   })
 
   bot.catch((err) => {
