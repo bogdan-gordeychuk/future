@@ -17,6 +17,7 @@ export interface BusinessSettings {
   welcome_message: string
   escalation_keywords: string[]
   notification_telegram_id?: string | null
+  timezone?: string
   working_hours: {
     mon: WorkingHoursDay
     tue: WorkingHoursDay

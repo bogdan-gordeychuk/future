@@ -39,7 +39,7 @@ export default async function KnowledgePage() {
 
       <div className="space-y-3 mb-6">
         {(items as KnowledgeItem[] ?? []).map((item) => (
-          <KnowledgeRow key={item.id} item={item} />
+          <KnowledgeRow key={item.id} item={item} businessId={business.id} />
         ))}
         {(!items || items.length === 0) && (
           <div className="rounded-xl bg-white p-8 shadow-sm text-center">
@@ -51,7 +51,7 @@ export default async function KnowledgePage() {
         )}
       </div>
 
-      <AddKnowledgeForm />
+      <AddKnowledgeForm businessId={business.id} />
     </div>
   )
 }

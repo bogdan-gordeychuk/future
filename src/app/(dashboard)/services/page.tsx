@@ -30,7 +30,7 @@ export default async function ServicesPage() {
 
       <div className="space-y-3 mb-6">
         {(services as Service[] ?? []).map((service) => (
-          <ServiceRow key={service.id} service={service} />
+          <ServiceRow key={service.id} service={service} businessId={business.id} />
         ))}
         {(!services || services.length === 0) && (
           <div className="rounded-xl bg-white p-8 shadow-sm text-center">
@@ -39,7 +39,7 @@ export default async function ServicesPage() {
         )}
       </div>
 
-      <AddServiceForm />
+      <AddServiceForm businessId={business.id} />
     </div>
   )
 }

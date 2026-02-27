@@ -29,7 +29,7 @@ export default async function MastersPage() {
 
       <div className="space-y-3 mb-6">
         {(masters as Master[] ?? []).map((master) => (
-          <MasterRow key={master.id} master={master} />
+          <MasterRow key={master.id} master={master} businessId={business.id} />
         ))}
         {(!masters || masters.length === 0) && (
           <div className="rounded-xl bg-white p-8 shadow-sm text-center">
@@ -38,7 +38,7 @@ export default async function MastersPage() {
         )}
       </div>
 
-      <AddMasterForm />
+      <AddMasterForm businessId={business.id} />
     </div>
   )
 }

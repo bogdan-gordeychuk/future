@@ -29,14 +29,14 @@ export async function GET(req: NextRequest) {
   const [{ data: bookings24h }, { data: bookings1h }] = await Promise.all([
     supabase
       .from('bookings')
-      .select('id, scheduled_at, business_id, businesses(telegram_bot_token), clients(telegram_user_id, first_name), services(name)')
+      .select('id, scheduled_at, business_id, businesses(telegram_bot_token, settings), clients(telegram_user_id, first_name), services(name)')
       .gte('scheduled_at', h24Start)
       .lte('scheduled_at', h24End)
       .is('reminder_24h_sent_at', null)
       .in('status', ['pending', 'confirmed']),
     supabase
       .from('bookings')
-      .select('id, scheduled_at, business_id, businesses(telegram_bot_token), clients(telegram_user_id, first_name), services(name)')
+      .select('id, scheduled_at, business_id, businesses(telegram_bot_token, settings), clients(telegram_user_id, first_name), services(name)')
       .gte('scheduled_at', h1Start)
       .lte('scheduled_at', h1End)
       .is('reminder_1h_sent_at', null)
@@ -75,7 +75,7 @@ type BookingWithJoins = {
   id: string
   scheduled_at: string
   business_id: string
-  businesses: { telegram_bot_token: string | null }[] | { telegram_bot_token: string | null } | null
+  businesses: { telegram_bot_token: string | null; settings?: { timezone?: string } | null }[] | { telegram_bot_token: string | null; settings?: { timezone?: string } | null } | null
   clients: { telegram_user_id: number | null; first_name: string | null }[] | { telegram_user_id: number | null; first_name: string | null } | null
   services: { name: string }[] | { name: string } | null
 }
@@ -97,12 +97,14 @@ async function sendReminder(booking: BookingWithJoins, type: '24h' | '1h'): Prom
     return false
   }
 
+  const tz = (biz as { settings?: { timezone?: string } } | null)?.settings?.timezone || 'Europe/Moscow'
+
   const time = new Date(booking.scheduled_at).toLocaleString('ru-RU', {
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Europe/Moscow',
+    timeZone: tz,
   })
 
   const name = client?.first_name ? `, ${client.first_name}` : ''

@@ -12,13 +12,28 @@ interface Props {
   phone: string
   address: string
   city: string
+  timezone: string
   notificationTelegramId: string
   hasToken: boolean
   maskedToken: string | null
 }
 
+const TIMEZONES = [
+  { value: 'Europe/Kaliningrad', label: 'Калининград (UTC+2)' },
+  { value: 'Europe/Moscow',      label: 'Москва, Санкт-Петербург (UTC+3)' },
+  { value: 'Europe/Samara',      label: 'Самара, Ижевск (UTC+4)' },
+  { value: 'Asia/Yekaterinburg', label: 'Екатеринбург (UTC+5)' },
+  { value: 'Asia/Omsk',          label: 'Омск (UTC+6)' },
+  { value: 'Asia/Krasnoyarsk',   label: 'Красноярск (UTC+7)' },
+  { value: 'Asia/Irkutsk',       label: 'Иркутск (UTC+8)' },
+  { value: 'Asia/Yakutsk',       label: 'Якутск (UTC+9)' },
+  { value: 'Asia/Vladivostok',   label: 'Владивосток (UTC+10)' },
+  { value: 'Asia/Magadan',       label: 'Магадан (UTC+11)' },
+  { value: 'Asia/Kamchatka',     label: 'Камчатка (UTC+12)' },
+]
+
 export default function SettingsForm({
-  businessId, name, description, phone, address, city, notificationTelegramId, hasToken, maskedToken,
+  businessId, name, description, phone, address, city, timezone, notificationTelegramId, hasToken, maskedToken,
 }: Props) {
   const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
   const [botState, botAction, botPending] = useActionState(saveBotToken, { error: null, success: false })
@@ -50,6 +65,15 @@ export default function SettingsForm({
             placeholder="Улица, дом, офис/кабинет" />
           <Field label="Город" name="city" defaultValue={city}
             placeholder="Москва" />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">Часовой пояс</label>
+            <select name="timezone" defaultValue={timezone || 'Europe/Moscow'}
+              className={INPUT}>
+              {TIMEZONES.map(tz => (
+                <option key={tz.value} value={tz.value}>{tz.label}</option>
+              ))}
+            </select>
+          </div>
           <Field
             label="Telegram ID для уведомлений о записях"
             name="notification_telegram_id"
