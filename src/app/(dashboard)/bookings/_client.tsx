@@ -1,8 +1,9 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useTransition } from 'react'
-import { updateBookingStatus } from '@/lib/actions/bookings'
+import { useTransition, useActionState, useEffect, useState } from 'react'
+import { updateBookingStatus, createManualBooking } from '@/lib/actions/bookings'
+import { toast } from 'sonner'
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Ожидает',
@@ -36,37 +37,154 @@ type Booking = {
   masters: { name: string } | null
 }
 
+type ServiceOption = { id: string; name: string }
+type MasterOption = { id: string; name: string }
+
 export function BookingsClient({
   bookings,
   businessId,
   timezone,
   currentFilter,
+  services,
+  masters,
 }: {
   bookings: Booking[]
   businessId: string
   timezone: string
   currentFilter: string
+  services: ServiceOption[]
+  masters: MasterOption[]
 }) {
   const router = useRouter()
+  const [showForm, setShowForm] = useState(false)
+  const [formState, formAction, formPending] = useActionState(createManualBooking, { error: null, success: false })
+
+  useEffect(() => {
+    if (formState.success) {
+      toast.success('Запись создана')
+      setShowForm(false)
+    }
+    if (formState.error) {
+      toast.error(formState.error)
+    }
+  }, [formState])
 
   return (
     <div>
-      {/* Filter tabs */}
-      <div className="flex gap-1 mb-6 bg-zinc-100 rounded-lg p-1 w-fit">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => router.push(`/bookings?filter=${f.key}`)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              currentFilter === f.key
-                ? 'bg-white text-zinc-900 shadow-sm'
-                : 'text-zinc-500 hover:text-zinc-700'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      {/* Header with create button */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex gap-1 bg-zinc-100 rounded-lg p-1 w-fit">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => router.push(`/bookings?filter=${f.key}`)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                currentFilter === f.key
+                  ? 'bg-white text-zinc-900 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-700'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+        >
+          + Создать запись
+        </button>
       </div>
+
+      {/* Manual booking form */}
+      {showForm && (
+        <div className="rounded-xl bg-white p-6 shadow-sm mb-6 border border-zinc-200">
+          <h3 className="text-sm font-medium text-zinc-900 mb-4">Новая запись вручную</h3>
+          <form action={formAction} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Имя клиента *</label>
+                <input
+                  type="text"
+                  name="client_name"
+                  required
+                  placeholder="Иван Иванов"
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 placeholder:text-zinc-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Телефон</label>
+                <input
+                  type="tel"
+                  name="client_phone"
+                  placeholder="+7 (999) 000-00-00"
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 placeholder:text-zinc-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Дата и время *</label>
+                <input
+                  type="datetime-local"
+                  name="scheduled_at"
+                  required
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Услуга</label>
+                <select
+                  name="service_id"
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500"
+                >
+                  <option value="">— не выбрана —</option>
+                  {services.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              {masters.length > 0 && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Мастер</label>
+                  <select
+                    name="master_id"
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500"
+                  >
+                    <option value="">— любой —</option>
+                    {masters.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className={masters.length > 0 ? '' : 'sm:col-span-2'}>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Примечание</label>
+                <input
+                  type="text"
+                  name="notes"
+                  placeholder="Пожелания клиента..."
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 placeholder:text-zinc-400"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={formPending}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {formPending ? 'Создание...' : 'Создать запись'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
+              >
+                Отмена
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {bookings.length === 0 ? (
         <div className="rounded-xl bg-white p-12 shadow-sm text-center">

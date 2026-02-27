@@ -112,14 +112,19 @@ export async function processMessage(
       notes?: string
     }
 
-    const tz =
-      (businessCtx.business.settings as { timezone?: string } | null)?.timezone || 'Europe/Moscow'
+    const bizSettings = businessCtx.business.settings as { timezone?: string; auto_confirm?: boolean } | null
+    const tz = bizSettings?.timezone || 'Europe/Moscow'
+    const autoConfirm = bizSettings?.auto_confirm ?? true // default: auto-confirm
 
-    const bookingResult = await createPendingBooking(businessCtx, clientId, input)
+    const bookingResult = await createPendingBooking(businessCtx, clientId, input, autoConfirm)
 
     let reply: string
     if (bookingResult.success) {
-      reply = `Записал! ${input.service_name} — ${formatDateTime(input.preferred_datetime, tz)}. Ждём вас! Чтобы отменить — напишите "отменить запись".`
+      if (autoConfirm) {
+        reply = `Записал! ${input.service_name} — ${formatDateTime(input.preferred_datetime, tz)}. Ждём вас! Чтобы отменить — напишите "отменить запись".`
+      } else {
+        reply = `Заявка принята! ${input.service_name} — ${formatDateTime(input.preferred_datetime, tz)}. Ожидайте подтверждения от администратора. Чтобы отменить — напишите "отменить запись".`
+      }
     } else if (bookingResult.reason === 'slot_taken') {
       const slots = businessCtx.availableSlots ?? []
       reply = `К сожалению, это время только что заняли. Вот свободные окна:\n${slots.slice(0, 4).join('\n')}`
@@ -156,7 +161,8 @@ function formatDateTime(iso: string, tz: string): string {
 async function createPendingBooking(
   ctx: BusinessContext,
   clientId: string,
-  input: { service_name: string; master_name?: string; preferred_datetime: string; notes?: string }
+  input: { service_name: string; master_name?: string; preferred_datetime: string; notes?: string },
+  autoConfirm = true
 ): Promise<{ success: boolean; reason?: string }> {
   try {
     const supabase = await createServiceClient()
@@ -193,7 +199,7 @@ async function createPendingBooking(
       scheduled_at: scheduledAt,
       duration_minutes: service?.duration_minutes ?? 60,
       price_kopecks: service?.price_kopecks ?? 0,
-      status: 'confirmed',
+      status: autoConfirm ? 'confirmed' : 'pending',
       notes: input.notes ?? null,
     })
 

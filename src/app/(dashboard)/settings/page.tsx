@@ -39,6 +39,7 @@ export default async function SettingsPage() {
         timezone={settings?.timezone ?? ''}
         notificationTelegramId={settings?.notification_telegram_id ?? ''}
         workingHours={workingHours}
+        autoConfirm={settings?.auto_confirm ?? false}
         hasToken={!!business.telegram_bot_token}
         maskedToken={business.telegram_bot_token ? maskToken(business.telegram_bot_token) : null}
         webhookConnected={!!business.telegram_bot_username}

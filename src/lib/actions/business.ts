@@ -22,6 +22,7 @@ export async function updateBusiness(
 
   const notifId = (formData.get('notification_telegram_id') as string)?.trim() || null
   const timezone = (formData.get('timezone') as string)?.trim() || null
+  const autoConfirm = formData.get('auto_confirm') === '1'
 
   // Parse working_hours from FormData
   const workingHoursEntries = WORKING_HOURS_DAYS.map(day => {
@@ -42,6 +43,7 @@ export async function updateBusiness(
     ...(biz?.settings as object ?? {}),
     notification_telegram_id: notifId,
     ...(timezone ? { timezone } : {}),
+    auto_confirm: autoConfirm,
     working_hours,
   }
 

@@ -32,6 +32,7 @@ export default async function DashboardPage() {
     { count: totalClients },
     { count: messagesMonth },
     { count: servicesCount },
+    { data: subscription },
   ] = await Promise.all([
     supabase
       .from('bookings')
@@ -54,9 +55,20 @@ export default async function DashboardPage() {
       .select('*', { count: 'exact', head: true })
       .eq('business_id', business.id)
       .eq('is_active', true),
+    supabase
+      .from('subscriptions')
+      .select('messages_used, messages_limit, plan, status')
+      .eq('business_id', business.id)
+      .single(),
   ])
 
   const bizSettings = business.settings as { notification_telegram_id?: string | null } | null
+
+  // Subscription usage
+  const messagesUsed = subscription?.messages_used ?? 0
+  const messagesLimit = subscription?.messages_limit ?? 0
+  const usagePercent = messagesLimit > 0 ? Math.min(100, Math.round((messagesUsed / messagesLimit) * 100)) : 0
+
   const setupSteps = [
     { label: 'Бизнес создан', done: true },
     { label: 'Добавьте хотя бы одну услугу', done: (servicesCount ?? 0) > 0, href: '/services' },
@@ -72,11 +84,44 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-semibold text-zinc-900 mb-1">{business.name}</h1>
       <p className="text-sm text-zinc-400 mb-8">Обзор за сегодня</p>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
         <StatCard label="Записей сегодня" value={bookingsToday ?? 0} />
         <StatCard label="Клиентов всего" value={totalClients ?? 0} />
-        <StatCard label="Сообщений за месяц" value={messagesMonth ?? 0} />
+        <StatCard
+          label="Сообщений за месяц"
+          value={messagesMonth ?? 0}
+          suffix={messagesLimit > 0 ? ` / ${messagesLimit}` : undefined}
+        />
       </div>
+
+      {/* Subscription usage mini-widget */}
+      {subscription && messagesLimit > 0 && (
+        <div className="rounded-xl bg-white p-5 shadow-sm mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-zinc-500">Использование AI</p>
+            <span className={`text-xs font-medium ${
+              usagePercent >= 90 ? 'text-red-600' :
+              usagePercent >= 70 ? 'text-amber-600' : 'text-zinc-500'
+            }`}>
+              {messagesUsed} / {messagesLimit} сообщений
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                usagePercent >= 90 ? 'bg-red-500' :
+                usagePercent >= 70 ? 'bg-amber-500' : 'bg-zinc-900'
+              }`}
+              style={{ width: `${usagePercent}%` }}
+            />
+          </div>
+          {usagePercent >= 80 && (
+            <p className="text-xs text-amber-600 mt-2">
+              Лимит заканчивается. <a href="/billing" className="underline">Обновить подписку →</a>
+            </p>
+          )}
+        </div>
+      )}
 
       {!setupDone && (
         <div className="rounded-xl bg-white p-6 shadow-sm">
@@ -117,11 +162,14 @@ export default async function DashboardPage() {
   )
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value, suffix }: { label: string; value: number; suffix?: string }) {
   return (
     <div className="rounded-xl bg-white p-5 shadow-sm">
       <p className="text-sm text-zinc-500">{label}</p>
-      <p className="mt-1 text-3xl font-semibold text-zinc-900">{value}</p>
+      <p className="mt-1 text-3xl font-semibold text-zinc-900">
+        {value}
+        {suffix && <span className="text-lg font-normal text-zinc-400">{suffix}</span>}
+      </p>
     </div>
   )
 }

@@ -30,6 +30,7 @@ interface Props {
   timezone: string
   notificationTelegramId: string
   workingHours: BusinessSettings['working_hours']
+  autoConfirm: boolean
   hasToken: boolean
   maskedToken: string | null
   webhookConnected: boolean
@@ -51,7 +52,7 @@ const TIMEZONES = [
 ]
 
 export default function SettingsForm({
-  businessId, name, description, phone, address, city, timezone, notificationTelegramId, workingHours, hasToken, maskedToken, webhookConnected, botUsername,
+  businessId, name, description, phone, address, city, timezone, notificationTelegramId, workingHours, autoConfirm, hasToken, maskedToken, webhookConnected, botUsername,
 }: Props) {
   const router = useRouter()
   const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
@@ -62,6 +63,7 @@ export default function SettingsForm({
   const [checkingWebhook, setCheckingWebhook] = useState(false)
   const [hours, setHours] = useState<BusinessSettings['working_hours']>(workingHours)
   const [selectedTimezone, setSelectedTimezone] = useState(timezone || 'Europe/Moscow')
+  const [autoConfirmEnabled, setAutoConfirmEnabled] = useState(autoConfirm)
 
   useEffect(() => {
     if (infoState.success) toast.success('Настройки сохранены')
@@ -132,6 +134,26 @@ export default function SettingsForm({
             defaultValue={notificationTelegramId}
             placeholder="123456789 — узнать через @userinfobot"
           />
+
+          {/* Auto-confirm toggle */}
+          <div>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="auto_confirm"
+                value="1"
+                checked={autoConfirmEnabled}
+                onChange={e => setAutoConfirmEnabled(e.target.checked)}
+                className="mt-0.5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-zinc-700">Автоподтверждение записей</span>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Новые заявки автоматически получают статус «Подтверждено» без ручного одобрения
+                </p>
+              </div>
+            </label>
+          </div>
 
           {/* Working hours hidden inputs */}
           {DAYS.map(({ key }) => (

@@ -42,24 +42,28 @@ export default async function ClientsPage({
 
   const { data: clients } = await clientsQuery
 
-  // Load message counts per client using aggregate query
-  const { data: messageCounts } = await supabase
-    .from('messages')
-    .select('client_id')
-    .eq('business_id', business.id)
-    .eq('role', 'user')
-
-  // Load last booking per client (only need one per client)
+  // Load message counts only for the clients we're showing (not ALL messages)
   const clientIds = (clients ?? []).map(c => c.id)
-  const { data: lastBookings } = clientIds.length > 0
-    ? await supabase
-        .from('bookings')
-        .select('client_id, scheduled_at')
-        .eq('business_id', business.id)
-        .in('client_id', clientIds)
-        .in('status', ['confirmed', 'completed'])
-        .order('scheduled_at', { ascending: false })
-    : { data: [] }
+
+  const [{ data: messageCounts }, { data: lastBookings }] = await Promise.all([
+    clientIds.length > 0
+      ? supabase
+          .from('messages')
+          .select('client_id')
+          .eq('business_id', business.id)
+          .eq('role', 'user')
+          .in('client_id', clientIds)
+      : Promise.resolve({ data: [] }),
+    clientIds.length > 0
+      ? supabase
+          .from('bookings')
+          .select('client_id, scheduled_at')
+          .eq('business_id', business.id)
+          .in('client_id', clientIds)
+          .in('status', ['confirmed', 'completed'])
+          .order('scheduled_at', { ascending: false })
+      : Promise.resolve({ data: [] }),
+  ])
 
   // Build lookup maps
   const messageCountMap: Record<string, number> = {}

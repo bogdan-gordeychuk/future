@@ -18,6 +18,7 @@ export interface BusinessSettings {
   escalation_keywords: string[]
   notification_telegram_id?: string | null
   timezone?: string
+  auto_confirm?: boolean
   working_hours: {
     mon: WorkingHoursDay
     tue: WorkingHoursDay
@@ -95,8 +96,9 @@ export interface ScheduleOverride {
 export interface Client {
   id: string
   business_id: string
-  telegram_user_id: number
+  telegram_user_id: number | null
   telegram_username: string | null
+  source?: 'telegram' | 'manual' | 'import'
   first_name: string | null
   last_name: string | null
   preferred_name: string | null
