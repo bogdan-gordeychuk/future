@@ -175,7 +175,7 @@ async function createPendingBooking(
         ) ?? ctx.masters.find(
           (m) => m.name.toLowerCase().includes(input.master_name!.toLowerCase())
         )
-      : ctx.masters[0] ?? null
+      : ctx.masters.length === 1 ? ctx.masters[0] : null
 
     // Parse datetime
     let scheduledAt: string

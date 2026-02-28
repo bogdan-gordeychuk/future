@@ -10,7 +10,7 @@
 
 ## СТАТУС РЕАЛИЗАЦИИ (Implementation Status)
 
-> Обновлено: 2026-02-28
+> Обновлено: 2026-02-28 (Claude Code — после pull + аудита)
 
 ### ✅ Реализовано (2026-02-28)
 
@@ -18,6 +18,7 @@
 |--------|------|-----|
 | Cron schedule исправлен (каждый час) | `vercel.json` | Критический баг |
 | Атомарный increment messages_used | `bot-factory.ts` + `005_atomic_increment.sql` | Критический баг |
+| **Миграция 005 применена в Supabase** | Supabase MCP | Миграция |
 | test-activate заблокирован в production | `test-activate/route.ts` | Безопасность |
 | Ограничение длины сообщения (1000 символов) | `bot-factory.ts` | Безопасность |
 | Vercel Analytics | `layout.tsx` + `package.json` | Аналитика |
@@ -28,24 +29,25 @@
 | Bot cache инвалидация при смене токена | `bot-factory.ts` + `business.ts` | Корректность |
 | Analytics: отдельные запросы вместо JS-группировки | `analytics/page.tsx` | Производительность |
 | Мобильная адаптация дашборда | `layout.tsx` + `mobile-nav.tsx` | UX/Mobile |
+| Slot generation timezone bug | `bot-factory.ts` (commit 0a7e523) | Критический баг |
+| Webhook идемпотентность (telegram_update_id check) | `webhook/route.ts` (commit 0a7e523) | Архитектура |
+| Per-token crypto salt (уникальный соль на токен) | `crypto.ts` (commit 0a7e523) | Безопасность |
+| Landing hero copy — боль вместо описания продукта | `page.tsx` (commit 0a7e523) | UX/Конверсия |
 
 ### ❌ Требует внешних действий (не может быть исправлено кодом)
 
 | Задача | Причина | Когда |
 |--------|---------|-------|
 | YooKassa настройка | Требует верификации аккаунта в YooKassa | Эта неделя |
-| Slot generation timezone bug | Требует `date-fns-tz` или рефакторинга | Фаза 1 |
-| Webhook идемпотентность | Сложное архитектурное изменение | Фаза 2 |
-| Фиксированный salt в crypto.ts | Требует миграции всех токенов | Фаза 2 |
 | Dev/Prod окружения | Инфраструктурное решение | Фаза 1 |
 
 ---
 
 ## 1. ТЕКУЩЕЕ СОСТОЯНИЕ (Current State Assessment)
 
-### Что работает end-to-end прямо сейчас
+> Обновлено: 2026-02-28
 
-Критический путь **полностью реализован**:
+### Критический путь — полностью работает
 
 ```
 Клиент пишет в Telegram
@@ -57,221 +59,76 @@
   → Claude Haiku → tool_use create_booking или text reply
   → уведомление владельцу
   → сохранение ответа
-  → increment messages_used (race condition!)
+  → atomic increment messages_used (SQL RPC, без race condition)
   → ответ клиенту
 ```
 
-**Полностью работает:**
-- Auth (Supabase Auth + RLS + 152-ФЗ чекбокс при регистрации)
-- Dashboard с онбординг-чеклистом (5 шагов)
+### Что работает
+
+- Auth: Supabase Auth + RLS + 152-ФЗ чекбокс при регистрации
+- Dashboard с онбординг-чеклистом (5 шагов), мобильная навигация
 - Services CRUD, Masters CRUD, Knowledge Base CRUD
-- Settings: токен бота (AES-256), timezone, рабочие часы (UI + DB), уведомления, webhook
-- Telegram webhook (multi-tenant по `?id=businessId`)
-- AI engine (Claude Haiku, Tool Use, история 20 сообщений)
-- Создание записей через AI (`create_booking` tool)
-- Занятые слоты в AI-контексте (7 дней вперёд)
-- Генерация доступных слотов (3 рабочих дня, 4 слота/день)
-- Bookings dashboard (фильтры: upcoming/pending/past, подтверждение/отмена/выполнение)
-- TG-уведомления клиенту при смене статуса записи
-- TG-уведомления владельцу о новых заявках
-- Reminders (24h, 1h) через cron
-- Trial subscription (400 сообщений, 14 дней) — автосоздание триггером
-- Message limits (trial + paid) с правильными текстами
-- Billing UI (статус, прогресс-бар использования, кнопка оплаты)
-- YooKassa webhook (верификация через re-fetch платежа)
-- Страница клиентов (список + поиск + статистика)
-- Детальная страница клиента (`/clients/[id]`)
-- Аналитика (сегодня/месяц, топ услуги/мастера, 7-дневная активность)
-- `/mybookings` команда в боте (клиент видит свои записи)
-- Отмена записи клиентом через бота
-- Landing page (FAQ, сравнение, pricing)
-- Privacy policy + Договор оферты (страницы существуют)
-- Vercel cron (1 раз в день в 8:00 UTC)
+- Settings: токен бота (AES-256 + уникальный salt на токен), timezone, рабочие часы UI, webhook
+- Telegram webhook: multi-tenant (`?id=businessId`), idempotency по `update_id`
+- AI engine: Claude Haiku, Tool Use, история 20 сообщений, лимит 1000 символов входящего
+- Создание записей: `create_booking` tool, auto-confirm, двойное бронирование невозможно (unique partial index)
+- Слоты: генерация с учётом рабочих часов, выходных мастера, timezone бизнеса
+- Bookings dashboard: фильтры, подтверждение/отмена/выполнение, TG-уведомления
+- Напоминания: 24h и 1h — Supabase pg_cron каждые 15 минут → `/api/cron/reminders`
+- Клиент: `/mybookings`, отмена через бота, уведомление владельцу
+- Trial: 400 сообщений или 14 дней — автосоздание триггером, правильные тексты лимита
+- Billing UI: статус подписки, прогресс-бар, кнопка оплаты, YooKassa webhook (код готов)
+- Страница клиентов: список + поиск + статистика, детальная страница `/clients/[id]`
+- Аналитика: выручка сегодня/месяц, топ услуги/мастера (SQL GROUP BY), 7-дневная активность
+- Landing: pain-focused hero, "14 дней или 400 сообщений", конкуренты, FAQ, ISR
+- `/privacy` (152-ФЗ), `/offer` (договор оферты) — в footer
+- `test-activate`: заблокирован в production (`NODE_ENV === 'production'` → 404)
+- Vercel Analytics: подключён
 
-### Что частично реализовано
+### Что не работает / ограничения
 
-| Компонент | Статус | Проблема |
-|-----------|--------|----------|
-| YooKassa платежи | Код готов, не протестирован | Shop не верифицирован в YooKassa |
-| Rate limiter | Работает, но только per-instance | In-memory Map не шарится между Vercel instances |
-| Bot cache | Работает, но per-instance | Cold start добавляет 200-500ms latency |
-| Slot generation | Работает, но с timezone bug | `new Date(slotDateStr)` не учитывает tz корректно |
-| Cron reminders | Работает, но только 1 раз в день | `vercel.json`: `"0 8 * * *"` — пропускает 1h-напоминания |
-| Analytics | Базовая реализация | Нет графиков, нет выручки по мастерам, нет конверсии |
-
-### Что отсутствует / сломано
-
-**🔴 Критично:**
-1. **YooKassa не настроен** — нет реальных платежей, нет бизнеса
-2. **Cron schedule неправильный** — `"0 8 * * *"` запускается раз в день. 1h-напоминания работают только для записей в 9:00-10:00 UTC. Нужно `"0 * * * *"` (каждый час)
-3. **Race condition в `messages_used`** — `subscription.messages_used + 1` без транзакции
-4. **`test-activate` endpoint в production** — любой знающий URL может активировать подписку
-
-**🟡 Важно:**
-5. **Нет Dev/Prod окружений** — все изменения идут прямо в prod
-6. **Нет ограничения длины входящего сообщения** — уязвимость к token-flooding атакам
-7. **Slot generation timezone bug** — `new Date(slotDateStr)` парсит как UTC, не как local time бизнеса
-8. **Нет идемпотентности webhook** — повторный Telegram webhook может создать дублирующую запись
-
-**🟢 Технический долг:**
-9. Фиксированный salt в `crypto.ts` (`'vika-token-v1'`)
-10. Plaintext fallback при расшифровке токенов (миграционный период)
-11. `clients/page.tsx` загружает ВСЕ сообщения для подсчёта (N+1 проблема)
-12. `analytics/page.tsx` группирует данные в JS вместо SQL GROUP BY
-13. README.md — дефолтный Next.js, не описывает проект
-14. `CLAUDE.md` — устаревший статус (Sprint 1/2, а проект на Sprint 7+)
+| Компонент | Состояние | Когда чинить |
+|-----------|-----------|--------------|
+| **YooKassa** | Код готов, shop не верифицирован | Эта неделя (внешнее действие) |
+| Rate limiter | In-memory, не шарится между Vercel instances | При 20+ клиентах → Redis |
+| Bot cache | Per-instance, cold start +200-500ms на первый запрос | При 20+ клиентах |
+| Analytics | Нет графиков, нет выручки по мастерам | Фаза 2 |
 
 ### Технический долг
 
-| Приоритет | Проблема | Файл | Сложность |
-|-----------|----------|------|-----------|
-| P0 | Cron schedule (1 раз в день вместо каждый час) | `vercel.json:5` | S |
-| P0 | Race condition messages_used | `bot-factory.ts:479` | S |
-| P0 | test-activate в production | `src/app/api/billing/test-activate/route.ts` | S |
-| P1 | Slot timezone bug | `bot-factory.ts:96` | M |
-| P1 | N+1 в clients page | `clients/page.tsx:46-57` | M |
-| P1 | Analytics в JS вместо SQL | `analytics/page.tsx:87-122` | M |
-| P2 | Фиксированный salt | `crypto.ts:9` | M |
-| P2 | Нет ограничения длины сообщения | `bot-factory.ts:200` | S |
-| P3 | README.md устарел | `README.md` | S |
+| Приоритет | Проблема | Файл |
+|-----------|----------|------|
+| P1 | Plaintext fallback при расшифровке старых токенов | `crypto.ts:36` |
+| P1 | Выбор мастера по умолчанию — берёт первого без проверки его слотов | `engine.ts:178` |
+| P2 | Dev/Prod окружения не разделены | инфраструктура |
+| P3 | README.md — дефолтный Next.js | `README.md` |
+| P3 | CLAUDE.md — статус Sprint 1/2, устарел | `CLAUDE.md` |
 
 ---
 
-## 2. КРИТИЧЕСКИЕ ЗАДАЧИ (Critical Tasks — must fix now)
+## 2. ЕДИНСТВЕННАЯ КРИТИЧЕСКАЯ ЗАДАЧА
 
-### 🔴 КРИТИЧНО-1: Cron schedule — 1h-напоминания не работают
+### 🔴 YooKassa — нет реальных платежей
 
-**Проблема:** `vercel.json` содержит `"0 8 * * *"` — запуск раз в день в 8:00 UTC. Функция `/api/cron/reminders` ищет записи в окне ±30 минут от текущего времени. При запуске раз в день 1h-напоминания работают только для записей в 8:45-9:15 UTC (11:45-12:15 МСК). Все остальные 1h-напоминания **никогда не отправляются**.
+**Проблема:** Код полностью готов (`src/lib/yookassa/client.ts`, `/api/billing/webhook`). Shop не верифицирован в YooKassa — нет production credentials.
 
-**Impact:** Клиенты не получают напоминание за 1 час. Это ключевая фича, которую продаём.
+**Impact:** Нельзя принимать платежи. После окончания trial клиенты не могут оплатить.
 
-**Решение:**
-```json
-// vercel.json
-{
-  "crons": [
-    {
-      "path": "/api/cron/reminders",
-      "schedule": "0 * * * *"
-    }
-  ]
-}
-```
-Запуск каждый час. Vercel Hobby поддерживает это.
-
-**Effort: S (5 минут)**
-
----
-
-### 🔴 КРИТИЧНО-2: Race condition в счётчике сообщений
-
-**Проблема:** `src/lib/telegram/bot-factory.ts:479`:
-```typescript
-.update({ messages_used: subscription.messages_used + 1 })
-```
-Это read-modify-write без транзакции. При двух параллельных сообщениях оба читают `messages_used = 5`, оба пишут `6`. Счётчик не увеличивается корректно.
-
-**Impact:** Клиенты могут превысить лимит сообщений без оплаты. При активном использовании (несколько клиентов одновременно) — реальная потеря денег.
-
-**Решение:** SQL-инкремент через RPC или прямой SQL:
-```typescript
-// Вместо .update({ messages_used: subscription.messages_used + 1 })
-await supabase.rpc('increment_messages_used', { sub_id: subscription.id })
-```
-
-SQL функция:
-```sql
-CREATE OR REPLACE FUNCTION increment_messages_used(sub_id uuid)
-RETURNS void LANGUAGE sql SECURITY DEFINER AS $$
-  UPDATE subscriptions
-  SET messages_used = messages_used + 1,
-      updated_at = now()
-  WHERE id = sub_id;
-$$;
-```
-
-**Effort: S (30 минут)**
-
----
-
-### 🔴 КРИТИЧНО-3: test-activate endpoint в production
-
-**Проблема:** `src/app/api/billing/test-activate/route.ts` — публичный endpoint, защищённый только `TEST_PAYMENT_SECRET`. Если секрет слабый, угадан или утёк — любой может активировать подписку бесплатно для любого `business_id`.
-
-**Impact:** Прямые финансовые потери. Полная компрометация биллинга.
-
-**Решение:** Удалить файл перед публичным запуском. Или добавить проверку `NODE_ENV !== 'production'`:
-```typescript
-if (process.env.NODE_ENV === 'production') {
-  return NextResponse.json({ error: 'Not available in production' }, { status: 404 })
-}
-```
-
-**Effort: S (5 минут)**
-
----
-
-### 🔴 КРИТИЧНО-4: YooKassa не настроен
-
-**Проблема:** Платежи работают только в симуляции. Нет реального дохода.
-
-**Impact:** Нет бизнеса.
-
-**Решение:**
+**Что сделать (Богдан, вручную):**
 1. Верифицировать аккаунт в YooKassa (1-3 дня)
-2. Настроить webhook URL: `https://your-domain.com/api/billing/webhook`
-3. Добавить `YOOKASSA_SHOP_ID` и `YOOKASSA_SECRET_KEY` в Vercel env vars
+2. Настроить webhook URL: `https://future-weld.vercel.app/api/billing/webhook`
+3. Добавить в Vercel env vars: `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`
 4. Протестировать full flow в тестовом режиме YooKassa
 5. Переключить на production credentials
 
-**Effort: M (1-3 дня на верификацию)**
-
----
-
-### 🟡 ВАЖНО-5: Нет ограничения длины входящего сообщения
-
-**Проблема:** Злоумышленник может отправить сообщение в 10 000 символов. Это раздует input tokens до ~2 500 tokens/запрос вместо ~50. При 1 000 сообщений/мес стоимость вырастет в 50 раз.
-
-**Impact:** Финансовые потери, исчерпание Anthropic лимита ($30/мес).
-
-**Решение:** В `src/lib/telegram/bot-factory.ts:200`:
-```typescript
-bot.on('message:text', async (ctx) => {
-  const text = ctx.message.text
-  if (text.length > 1000) {
-    await ctx.reply('Сообщение слишком длинное. Пожалуйста, напишите короче.')
-    return
-  }
-  // ...
-})
+**Пока YooKassa не готова:** Для тестовых клиентов (знакомые) продлять trial вручную через Supabase:
+```sql
+UPDATE subscriptions
+SET subscription_status = 'active',
+    messages_limit = 1000,
+    current_period_end = now() + interval '30 days'
+WHERE business_id = '<UUID>';
 ```
-
-**Effort: S (10 минут)**
-
----
-
-### 🟡 ВАЖНО-6: Slot generation timezone bug
-
-**Проблема:** В `src/lib/telegram/bot-factory.ts:96`:
-```typescript
-const slotMs = new Date(`${dateStr}T${String(slotHour).padStart(2, '0')}:${String(slotMin).padStart(2, '0')}:00`).getTime()
-```
-`new Date('2026-03-01T10:00:00')` парсится как **UTC**, не как local time бизнеса. Для бизнеса в Москве (UTC+3) слот "10:00" будет показан как "13:00 МСК". Клиенты получают неправильное время.
-
-**Impact:** Клиенты записываются на неправильное время. Критично для продукта.
-
-**Решение:** Использовать правильное преобразование timezone:
-```typescript
-// Создать дату в timezone бизнеса
-const slotIso = `${dateStr}T${String(slotHour).padStart(2, '0')}:${String(slotMin).padStart(2, '0')}:00`
-// Конвертировать из tz в UTC
-const slotMs = new Date(
-  new Date(slotIso).toLocaleString('en-US', { timeZone: 'UTC' })
-).getTime() - getTimezoneOffset(tz, new Date(slotIso))
-```
-Или использовать библиотеку `date-fns-tz` для корректной работы с timezone.
-
-**Effort: M (2-3 часа)**
 
 ---
 
@@ -298,95 +155,36 @@ const slotMs = new Date(
 3. Исправить счётчик "Записей сегодня" (только confirmed + completed)
 4. Показывать "X / Y сообщений" вместо просто числа
 
-### Landing page — реальная боль vs. текущий текст
+### Landing page — текущее состояние
 
-**Текущий hero:** "Ваш Telegram-бот, который записывает клиентов"
+**Что работает:**
+- Hero: "Перестаньте отвечать на «когда можно записаться?» в 23:00" ✅
+- Trial: "14 дней или 400 сообщений бесплатно · без карты" ✅
+- Таблица сравнения с конкурентами ✅
+- FAQ из 10 вопросов ✅
+- Ссылки на /privacy и /offer в footer ✅
 
-**Проблема:** Это описание продукта, а не боль клиента. Владелец барбершопа не думает "мне нужен бот". Он думает:
-- "Я трачу час в день на переписку с клиентами"
-- "Клиенты пишут в 23:00, я не отвечаю — они уходят к конкурентам"
-- "Я забываю напоминать клиентам — они не приходят"
-
-**Что изменить:**
-
-```
-БЫЛО: "Ваш Telegram-бот, который записывает клиентов"
-СТАЛО: "Перестаньте отвечать на «когда можно записаться?» в 23:00"
-```
-
-Подзаголовок:
-```
-БЫЛО: "Подключите бота — ВИКА ответит на вопросы, запишет клиента и напомнит о визите."
-СТАЛО: "ВИКА отвечает клиентам 24/7, записывает и напоминает о визите. Вы занимаетесь работой — не перепиской."
-```
-
-**Что добавить:**
-1. **Конкретные цифры боли:** "Владелец барбершопа тратит 45 минут в день на переписку. ВИКА делает это за него."
-2. **Скриншот/GIF диалога** — показать как выглядит разговор клиента с ботом
-3. **Социальное доказательство** — хотя бы 1 отзыв после первых клиентов
-4. **Уточнить trial:** "14 дней или 400 сообщений бесплатно" (сейчас только "14 дней")
-5. **Убрать "Психологи" из списка** — это не целевая аудитория (слишком чувствительная тема для AI)
-
-**Что оставить:**
-- Таблица сравнения с конкурентами — хорошо работает
-- FAQ из 10 вопросов — закрывает возражения
-- Один тариф — нет паралича выбора
+**Что добавить после первых клиентов:**
+- Скриншот/GIF диалога бота — конверсия вырастет
+- 1-2 отзыва реальных клиентов
 
 ### Mobile responsiveness
 
-**Проблема:** Dashboard layout (`src/app/(dashboard)/layout.tsx:18`) использует фиксированный sidebar `w-52`. На мобильных устройствах (< 640px) sidebar занимает 208px из ~375px экрана — контент сжимается до 167px. Это **нечитаемо**.
+Dashboard адаптирован: мобильная навигация снизу (`mobile-nav.tsx`) ✅
 
-**Конкретные проблемы:**
-- `aside` не скрывается на мобильных
-- `main` не имеет `overflow-x: auto`
-- Таблица в `analytics/page.tsx` не адаптирована для мобильных
-- Bookings list (`_client.tsx`) — карточки могут быть слишком узкими
+**Что остаётся:**
+- `loading.tsx` файлы минимальны, нет skeleton screens
+- Кнопки не показывают loading state при submit (backlog)
 
-**Решение:** Добавить мобильный hamburger menu или скрывать sidebar на `< md`:
-```tsx
-// layout.tsx
-<aside className="hidden md:flex w-52 ...">
-```
-И добавить мобильную навигацию снизу экрана.
+### Конкретный список улучшений UX (backlog)
 
-**Важность:** Владельцы барбершопов управляют бизнесом с телефона. Если дашборд не работает на мобильном — это блокер для retention.
-
-### Loading states / Skeleton screens
-
-**Хорошо:** Все страницы имеют `loading.tsx` файлы (billing, bookings, clients, dashboard, knowledge, masters, services, settings).
-
-**Плохо:**
-- `loading.tsx` файлы — пустые или минимальные (нет skeleton screens)
-- Нет оптимистичных обновлений при изменении статуса записи
-- Кнопки не показывают loading state при submit
-
-**Рекомендация:** Добавить skeleton screens в `loading.tsx` для ключевых страниц (bookings, clients).
-
-### Error handling UX
-
-**Хорошо:**
-- Billing page показывает `?payment=error` с email поддержки
-- Server actions возвращают `{ error: string | null }`
-- Sonner toasts для уведомлений
-
-**Плохо:**
-- Нет глобального error boundary
-- При ошибке загрузки данных — пустой экран без объяснений
-- Нет retry механизма для failed actions
-
-### Конкретный список улучшений UX
-
-| Приоритет | Улучшение | Файл | Effort |
-|-----------|-----------|------|--------|
-| P0 | Mobile sidebar (скрыть на < md) | `(dashboard)/layout.tsx` | S |
-| P0 | Уточнить trial copy на лендинге | `page.tsx:26,174,191,300` | S |
-| P1 | Мини-виджет подписки на дашборде | `dashboard/page.tsx` | M |
-| P1 | Последние 5 записей на дашборде | `dashboard/page.tsx` | M |
-| P1 | Hero copy — боль вместо описания | `page.tsx:28-37` | S |
-| P1 | Скриншот диалога на лендинге | `page.tsx` | M |
-| P2 | Skeleton screens в loading.tsx | все `loading.tsx` | M |
-| P2 | Loading state на кнопках | `_client.tsx`, `_form.tsx` | M |
-| P3 | Мобильная нижняя навигация | новый компонент | L |
+| Приоритет | Улучшение | Файл |
+|-----------|-----------|------|
+| P1 | Мини-виджет подписки на дашборде (X/Y сообщений) | `dashboard/page.tsx` |
+| P1 | Последние 5 записей на дашборде | `dashboard/page.tsx` |
+| P1 | Скриншот диалога на лендинге | `page.tsx` |
+| P2 | Skeleton screens в loading.tsx | все `loading.tsx` |
+| P2 | Loading state на кнопках | `_client.tsx`, `_form.tsx` |
 
 ---
 

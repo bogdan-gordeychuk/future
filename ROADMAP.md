@@ -13,24 +13,24 @@
 | Auth (login/register + consent) | ✅ | Supabase Auth + RLS + 152-ФЗ чекбокс |
 | Dashboard (статистика) | ✅ | Параллельные запросы, счётчики |
 | Services CRUD | ✅ | Fast: businessId из hidden field |
-| Masters CRUD | ✅ | Без рабочих часов (DB есть, UI нет) |
+| Masters CRUD | ✅ | Включая time-off UI (`/masters/[id]/time-off`) |
 | Knowledge base | ✅ | CRUD для FAQ бота |
 | Settings | ✅ | Токен (AES-256), timezone, уведомления, webhook |
 | Telegram webhook | ✅ | Multi-tenant routing по `?id=businessId` |
 | AI engine (Claude Haiku) | ✅ | Разговоры, история, контекст бизнеса |
-| AI создаёт записи (Path B) | ✅ | Tool Use `create_booking`, `pending` статус |
+| AI создаёт записи (Path B) | ✅ | Tool Use `create_booking`, auto-confirm (`confirmed`) |
 | Занятые слоты в AI-контексте | ✅ | 7 дней вперёд передаются в промпт |
 | Bookings dashboard | ✅ | Фильтры, подтверждение/отмена/выполнение |
 | TG уведомления при смене статуса | ✅ | Клиент получает сообщение |
 | Уведомления владельцу о записях | ✅ | Когда бот создаёт заявку |
-| Reminders (24h, 1h) | ✅ | Supabase pg_cron → /api/cron/reminders |
+| Reminders (24h, 1h) | ✅ | Supabase pg_cron каждые 15 мин → /api/cron/reminders |
 | Trial subscription auto-create | ✅ | Триггер + 400 msg лимит (migration 003) |
 | Message limits (trial + paid) | ✅ | Правильные тексты при исчерпании |
-| Billing + YooKassa | ✅ | Симуляция, ошибки отображаются корректно |
-| test-activate endpoint | ✅ | Для тестирования без YooKassa |
+| Billing + YooKassa | ⚠️ | Код готов, shop не верифицирован — единственный блокер |
+| test-activate endpoint | ✅ | Заблокирован в production (NODE_ENV check → 404) |
 | Toast notifications | ✅ | sonner |
 | ConfirmModal (удаление) | ✅ | Кастомный модал |
-| Landing page | ✅ | FAQ из 10 вопросов, цены, сравнение |
+| Landing page | ✅ | Pain-focused hero, "14 дней или 400 сообщений", FAQ, сравнение |
 | /privacy page | ✅ | 152-ФЗ |
 | DB indexes | ✅ | migration 003: services/masters/kb/messages |
 | Детальные логи бота | ✅ | `[bot:BIZID]` + структура ошибки |
@@ -112,39 +112,45 @@
 
 ---
 
-## Беклог — Sprint 7+
+## Беклог
 
-### P0 — Нужно прямо сейчас
-- [x] **Страница клиентов** — /clients: список с поиском, клик → история переписки + записи ✅
-- [ ] **Real YooKassa payments** — верифицировать shop, webhook, убрать test-activate
-- [x] **Bot /mybookings** — клиент пишет «мои записи» → видит предстоящие ✅
-- [ ] **Slot generation timezone bug** — `new Date(slotDateStr)` парсит как UTC, нужен `date-fns-tz`
+### P0 — Единственный блокер запуска
+- [ ] **Real YooKassa payments** — верифицировать shop, настроить webhook, добавить env vars в Vercel
 
-### P1 — Удобство для бизнеса
-- [ ] **Аналитика** — /analytics: записей/день, топ услуг, конверсия, выручка
-- [ ] **Блокировка времени** — отметить «не работаю» конкретную дату
-- [ ] **Экспорт записей** — CSV/Excel для бухгалтерии
+### P1 — После первых клиентов
+- [ ] **Мини-виджет подписки на дашборде** — показывать X/Y сообщений без перехода в /billing
+- [ ] **Последние 5 записей на дашборде** — владелец видит что происходит прямо сейчас
+- [ ] **Скриншот/GIF диалога на лендинге** — после первых клиентов, конверсия вырастет
+- [ ] **Экспорт записей** — CSV для бухгалтерии
+- [ ] **Skeleton screens** в loading.tsx для ключевых страниц
 
-### P2 — Рост и монетизация
-- [ ] **Email напоминания** — альтернатива TG
-- [ ] **Публичная страница** — /b/slug: визитка с кнопкой «Записаться»
-- [ ] **Отмена записи клиентом** — /cancel через бота
-- [ ] **Договор-оферта** на сайте
+### P2 — Рост
+- [ ] **Второй тариф** — 790 ₽ / 300 сообщений (для частных мастеров)
+- [ ] **Онлайн-оплата клиентом через бота** — снижает no-show
+- [ ] **Публичная страница** — /b/slug с QR-кодом
+- [ ] **Email/SMS напоминания** — резерв на случай проблем с Telegram
 - [ ] **Годовой план** со скидкой 20%
 
 ### P3 — Масштабирование (при росте)
-- [ ] Supabase Pro → PITR бэкапы (5+ платящих)
-- [ ] Redis (Upstash) distributed rate limiting (20+)
-- [ ] AI queue BullMQ (50+)
+- [ ] Supabase Pro → PITR бэкапы (при 5+ платящих)
+- [ ] Redis (Upstash) distributed rate limiting (при 20+ клиентах)
+- [ ] AI queue BullMQ (при 50+ клиентах)
+- [ ] Уведомление РКН (перед PR-кампанией)
 
 ---
 
 ## Безопасность
 
 ### Хранение данных
-- Telegram токены ботов: AES-256-CBC, фиксированный salt — допустимо для MVP
-- Service Role Key: только в Vercel secrets, никогда в логах
-- Клиентские данные: TG ID, имя, username — персональные данные по 152-ФЗ
+- Telegram токены: AES-256-CBC + уникальный per-token random salt ✅
+- Service Role Key: только в Vercel secrets, никогда в логах ✅
+- Webhook: `x-telegram-bot-api-secret-token` верификация ✅
+- YooKassa webhook: re-fetch платежа через API ✅
+- Клиентские данные: TG ID, имя — персональные данные по 152-ФЗ, /privacy ✅
+
+### Ограничения (MVP)
+- Rate limiter: in-memory, не шарится между Vercel instances → Redis при 20+ клиентах
+- Supabase Free: 1 день retention бэкапов → Pro при 5+ платящих
 
 ### Бэкапы
 - Supabase Free: ежедневные бэкапы, 1 день retention
@@ -175,19 +181,25 @@
 
 ---
 
-## Последние изменения (2026-02-28)
+## Последние изменения (2026-02-28, Sprint 8 fixes)
 
 | Изменение | Файл(ы) | Тип |
 |-----------|---------|-----|
-| Cron schedule исправлен: `"0 8 * * *"` → `"0 * * * *"` (каждый час) | `vercel.json` | Критический баг |
+| Напоминания: Supabase pg_cron каждые 15 мин (обход лимита Vercel Hobby 1/день) | `migrations/003` | Архитектура |
 | Атомарный `increment_messages_used` через SQL RPC | `bot-factory.ts` + `005_atomic_increment.sql` | Критический баг |
-| `test-activate` заблокирован в production (возвращает 404) | `test-activate/route.ts` | Безопасность |
+| `test-activate` заблокирован в production (NODE_ENV check → 404) | `test-activate/route.ts` | Безопасность |
 | Ограничение длины сообщения 1000 символов | `bot-factory.ts` | Безопасность |
-| Добавлен `@vercel/analytics` + `<Analytics />` компонент | `package.json` + `layout.tsx` | Аналитика |
-| Trial copy обновлён: "14 дней или 400 сообщений бесплатно" (4 места) | `page.tsx` | UX/Честность |
+| Per-token random salt в шифровании токенов (AES-256 + уникальный scrypt salt) | `crypto.ts` | Безопасность |
+| Webhook idempotency: дедупликация по `telegram_update_id` | `webhook/route.ts` | Надёжность |
+| Slot generation timezone bug исправлен | `bot-factory.ts` | Критический баг |
+| Выбор мастера: для single-master auto, для multi-master — только по имени | `engine.ts` | Корректность |
+| Добавлен `@vercel/analytics` | `package.json` + `layout.tsx` | Аналитика |
+| Trial copy: "14 дней или 400 сообщений бесплатно" | `page.tsx` | UX |
+| Hero лендинга: pain-focused copy | `page.tsx` | Конверсия |
 | ISR для лендинга: `revalidate = 3600` | `page.tsx` | Производительность |
-| Счётчик записей на дашборде фильтрует только `confirmed + completed` | `dashboard/page.tsx` | Корректность данных |
-| N+1 исправлен: message count по `role='user'`, last bookings по client IDs | `clients/page.tsx` | Производительность |
-| `invalidateBotCache` вызывается при сохранении нового токена бота | `bot-factory.ts` + `business.ts` | Корректность |
-| Analytics: отдельные SQL-запросы вместо JS-группировки всех записей месяца | `analytics/page.tsx` | Производительность |
-| Мобильная адаптация: скрытый sidebar на мобильных, mobile header, bottom nav | `layout.tsx` + `mobile-nav.tsx` | UX/Mobile |
+| Счётчик записей на дашборде: только `confirmed + completed` | `dashboard/page.tsx` | Корректность |
+| N+1 исправлен в clients page | `clients/page.tsx` | Производительность |
+| Analytics: SQL GROUP BY вместо JS-группировки | `analytics/page.tsx` | Производительность |
+| Bot cache инвалидация при смене токена | `bot-factory.ts` + `business.ts` | Корректность |
+| Мобильная навигация: mobile header + bottom nav | `layout.tsx` + `mobile-nav.tsx` | UX/Mobile |
+| README.md, CLAUDE.md актуализированы | `README.md`, `CLAUDE.md` | Документация |
