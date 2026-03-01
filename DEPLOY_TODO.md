@@ -104,10 +104,10 @@ GET https://future-weld.vercel.app/api/cron/monitor?secret=ВАШ_CRON_SECRET
 | `NEXT_PUBLIC_APP_URL` | ✅ есть |
 | `YOOKASSA_SHOP_ID` | ✅ есть (ждёт верификации) |
 | `YOOKASSA_SECRET_KEY` | ✅ есть (ждёт верификации) |
-| `PLATFORM_BOT_TOKEN` | ❌ добавить (п.1 выше) |
-| `PLATFORM_CHAT_ID` | ❌ добавить (п.1 выше) |
-| `UPSTASH_REDIS_REST_URL` | ⏳ опционально (п.2 выше) |
-| `UPSTASH_REDIS_REST_TOKEN` | ⏳ опционально (п.2 выше) |
+| `PLATFORM_BOT_TOKEN` | ✅ есть |
+| `PLATFORM_CHAT_ID` | ✅ есть |
+| `UPSTASH_REDIS_REST_URL` | ✅ есть |
+| `UPSTASH_REDIS_REST_TOKEN` | ✅ есть |
 
 ---
 
@@ -116,4 +116,5 @@ GET https://future-weld.vercel.app/api/cron/monitor?secret=ВАШ_CRON_SECRET
 - ✅ 80% лимит — предупреждение автоматически уйдёт в Telegram при достижении
 - ✅ Пауза бота — Settings → чекбокс "Бот принимает сообщения"
 - ✅ Ближайшие записи — видны на дашборде
-- ✅ pg_cron `vika-monitor` — создан в Supabase (нужно только добавить env vars и установить `app.cron_secret`)
+- ✅ pg_cron `vika-monitor` — работает, дайджест приходит в @vika_monitor_bot каждый день в 10:00 МСК
+- ✅ Redis rate limiter — Upstash подключён (env vars в Vercel)

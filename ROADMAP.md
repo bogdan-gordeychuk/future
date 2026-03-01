@@ -146,7 +146,7 @@
 
 ### P3 — Масштабирование (при росте)
 - [ ] Supabase Pro → PITR бэкапы (при 5+ платящих)
-- [x] Redis (Upstash) distributed rate limiting ✅ Sprint 10 (код готов, требует env vars)
+- [x] Redis (Upstash) distributed rate limiting ✅ Sprint 10 (env vars добавлены в Vercel)
 - [ ] AI queue BullMQ (при 50+ клиентах)
 - [ ] Уведомление РКН (перед PR-кампанией)
 
