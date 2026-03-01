@@ -27,6 +27,7 @@ interface Props {
   phone: string
   address: string
   city: string
+  slug: string | null
   timezone: string
   notificationTelegramId: string
   workingHours: BusinessSettings['working_hours']
@@ -51,7 +52,7 @@ const TIMEZONES = [
 ]
 
 export default function SettingsForm({
-  businessId, name, description, phone, address, city, timezone, notificationTelegramId, workingHours, hasToken, maskedToken, webhookConnected, botUsername,
+  businessId, name, description, phone, address, city, slug, timezone, notificationTelegramId, workingHours, hasToken, maskedToken, webhookConnected, botUsername,
 }: Props) {
   const router = useRouter()
   const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
@@ -197,6 +198,9 @@ export default function SettingsForm({
         </div>
       </div>
 
+      {/* Public page */}
+      {slug && <PublicPageSection slug={slug} />}
+
       {/* Bot token */}
       <div className="rounded-xl bg-white p-6 shadow-sm">
         <h2 className="text-base font-medium text-zinc-900 mb-1">Telegram-бот</h2>
@@ -263,6 +267,48 @@ export default function SettingsForm({
             )}
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+function PublicPageSection({ slug }: { slug: string }) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://future-weld.vercel.app'
+  const publicUrl = `${appUrl}/b/${slug}`
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(publicUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-6 shadow-sm">
+      <h2 className="text-base font-medium text-zinc-900 mb-1">Публичная страница</h2>
+      <p className="text-sm text-zinc-500 mb-4">
+        Поделитесь этой ссылкой с клиентами или распечатайте QR-код.
+      </p>
+      <div className="flex items-center gap-2">
+        <span className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-mono text-zinc-600 truncate">
+          {publicUrl}
+        </span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap"
+        >
+          {copied ? 'Скопировано!' : 'Копировать'}
+        </button>
+        <a
+          href={publicUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 whitespace-nowrap"
+        >
+          Открыть
+        </a>
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { processMessage } from '@/lib/ai/engine'
 import { checkRateLimit } from './rate-limiter'
 import { decryptToken } from '@/lib/crypto'
+import { handleAdminMessage } from './admin-handler'
 import type { Business, Service, Master, KnowledgeItem, Client, Message, BusinessSettings } from '@/types/database'
 
 // Cache bot instances: businessId → Bot
@@ -243,6 +244,20 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
 
     if (bizError || !business) {
       logError(businessId, 'DB error fetching business:', bizError)
+      return
+    }
+
+    // Admin check: if sender is the notification_telegram_id owner, route to admin pipeline
+    const notifIdCheck = (business.settings as { notification_telegram_id?: string | null } | null)
+      ?.notification_telegram_id
+    if (notifIdCheck && ctx.from.id.toString() === notifIdCheck) {
+      log(businessId, `admin message from tgUser=${telegramUserId}`)
+      try {
+        await handleAdminMessage(ctx, businessId, business, supabase)
+      } catch (err) {
+        logError(businessId, 'Admin handler error:', err)
+        await ctx.reply('Произошла ошибка. Попробуйте позже.')
+      }
       return
     }
 

@@ -45,6 +45,7 @@ export interface Business {
   phone: string | null
   address: string | null
   city: string | null
+  slug: string | null
   telegram_bot_token: string | null
   telegram_bot_username: string | null
   settings: BusinessSettings

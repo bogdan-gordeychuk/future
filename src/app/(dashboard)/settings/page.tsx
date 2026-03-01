@@ -36,6 +36,7 @@ export default async function SettingsPage() {
         phone={business.phone ?? ''}
         address={business.address ?? ''}
         city={business.city ?? ''}
+        slug={business.slug ?? null}
         timezone={settings?.timezone ?? ''}
         notificationTelegramId={settings?.notification_telegram_id ?? ''}
         workingHours={workingHours}
