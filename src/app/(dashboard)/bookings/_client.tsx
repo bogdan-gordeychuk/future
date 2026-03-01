@@ -1,8 +1,9 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useTransition } from 'react'
-import { updateBookingStatus } from '@/lib/actions/bookings'
+import { useTransition, useState } from 'react'
+import { toast } from 'sonner'
+import { updateBookingStatus, rescheduleBooking } from '@/lib/actions/bookings'
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Ожидает',
@@ -88,6 +89,78 @@ export function BookingsClient({
   )
 }
 
+function RescheduleModal({
+  open,
+  currentAt,
+  timezone,
+  onConfirm,
+  onCancel,
+  isPending,
+}: {
+  open: boolean
+  currentAt: string
+  timezone: string
+  onConfirm: (isoDatetime: string) => void
+  onCancel: () => void
+  isPending: boolean
+}) {
+  // Format current datetime as local datetime-local value for the input default
+  const defaultValue = (() => {
+    try {
+      const d = new Date(currentAt)
+      // Format in business timezone as YYYY-MM-DDTHH:MM
+      const str = d.toLocaleString('sv-SE', { timeZone: timezone })
+      return str.slice(0, 16) // "YYYY-MM-DD HH:MM" → need "YYYY-MM-DDTHH:MM"
+        .replace(' ', 'T')
+    } catch {
+      return ''
+    }
+  })()
+
+  const [value, setValue] = useState(defaultValue)
+
+  if (!open) return null
+
+  const handleConfirm = () => {
+    if (!value) return
+    // The datetime-local value is in browser local time. For accuracy we
+    // need to convert to UTC. We treat the user's browser as the same tz as the business.
+    const iso = new Date(value).toISOString()
+    onConfirm(iso)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+        <p className="text-sm font-medium text-zinc-900 mb-4">Перенести запись</p>
+        <label className="text-xs text-zinc-500 block mb-1">Новые дата и время</label>
+        <input
+          type="datetime-local"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 mb-4"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={handleConfirm}
+            disabled={isPending || !value}
+            className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          >
+            {isPending ? 'Перенос...' : 'Перенести'}
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={isPending}
+            className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function BookingCard({
   booking: b,
   businessId,
@@ -98,6 +171,7 @@ function BookingCard({
   timezone: string
 }) {
   const [isPending, startTransition] = useTransition()
+  const [rescheduleOpen, setRescheduleOpen] = useState(false)
 
   const client = b.clients
   const clientName =
@@ -110,66 +184,108 @@ function BookingCard({
     timeZone: timezone,
   })
 
-  const changeStatus = (status: 'confirmed' | 'cancelled' | 'completed') => {
+  const changeStatus = (status: 'confirmed' | 'cancelled' | 'completed' | 'no_show') => {
     startTransition(async () => {
       await updateBookingStatus(b.id, businessId, status)
     })
   }
 
+  const handleReschedule = (isoDatetime: string) => {
+    startTransition(async () => {
+      const res = await rescheduleBooking(b.id, businessId, isoDatetime)
+      if (res.error) {
+        toast.error(res.error)
+      } else {
+        toast.success('Запись перенесена')
+        setRescheduleOpen(false)
+      }
+    })
+  }
+
   const isPendingStatus = b.status === 'pending'
   const isConfirmed = b.status === 'confirmed'
+  const isUpcoming = new Date(b.scheduled_at) > new Date()
+  const canReschedule = (isPendingStatus || isConfirmed) && isUpcoming
 
   return (
-    <div className={`rounded-xl bg-white p-5 shadow-sm ${isPending ? 'opacity-60' : ''}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[b.status] ?? 'bg-zinc-100 text-zinc-600'}`}>
-              {STATUS_LABELS[b.status] ?? b.status}
-            </span>
-            <span className="text-xs text-zinc-400">{date}</span>
+    <>
+      <div className={`rounded-xl bg-white p-5 shadow-sm ${isPending ? 'opacity-60' : ''}`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[b.status] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                {STATUS_LABELS[b.status] ?? b.status}
+              </span>
+              <span className="text-xs text-zinc-400">{date}</span>
+            </div>
+            <p className="text-sm font-medium text-zinc-900">{clientName}</p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {b.services?.name ?? '—'}
+              {b.masters?.name ? ` · ${b.masters.name}` : ''}
+            </p>
+            {b.notes && (
+              <p className="text-xs text-zinc-400 mt-1 italic">"{b.notes}"</p>
+            )}
           </div>
-          <p className="text-sm font-medium text-zinc-900">{clientName}</p>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            {b.services?.name ?? '—'}
-            {b.masters?.name ? ` · ${b.masters.name}` : ''}
-          </p>
-          {b.notes && (
-            <p className="text-xs text-zinc-400 mt-1 italic">"{b.notes}"</p>
-          )}
-        </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2 shrink-0">
-          {isPendingStatus && (
-            <>
+          {/* Action buttons */}
+          <div className="flex flex-wrap gap-2 shrink-0 justify-end">
+            {isPendingStatus && (
+              <>
+                <button
+                  onClick={() => changeStatus('confirmed')}
+                  disabled={isPending}
+                  className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  Подтвердить
+                </button>
+                <button
+                  onClick={() => changeStatus('cancelled')}
+                  disabled={isPending}
+                  className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Отменить
+                </button>
+              </>
+            )}
+            {isConfirmed && isUpcoming && (
               <button
-                onClick={() => changeStatus('confirmed')}
+                onClick={() => changeStatus('completed')}
                 disabled={isPending}
-                className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
               >
-                Подтвердить
+                Завершить
               </button>
+            )}
+            {isConfirmed && !isUpcoming && (
               <button
-                onClick={() => changeStatus('cancelled')}
+                onClick={() => changeStatus('no_show')}
                 disabled={isPending}
-                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="rounded-lg border border-orange-200 px-3 py-1.5 text-xs text-orange-600 hover:bg-orange-50 disabled:opacity-50"
               >
-                Отменить
+                Не пришёл
               </button>
-            </>
-          )}
-          {isConfirmed && (
-            <button
-              onClick={() => changeStatus('completed')}
-              disabled={isPending}
-              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
-            >
-              Завершить
-            </button>
-          )}
+            )}
+            {canReschedule && (
+              <button
+                onClick={() => setRescheduleOpen(true)}
+                disabled={isPending}
+                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+              >
+                Перенести
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      <RescheduleModal
+        open={rescheduleOpen}
+        currentAt={b.scheduled_at}
+        timezone={timezone}
+        onConfirm={handleReschedule}
+        onCancel={() => setRescheduleOpen(false)}
+        isPending={isPending}
+      />
+    </>
   )
 }

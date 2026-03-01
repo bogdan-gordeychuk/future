@@ -418,6 +418,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       { data: knowledgeItems, error: kbError },
       { data: history, error: histError },
       { data: upcomingBookings, error: bookError },
+      { data: clientBookings, error: clientBookError },
     ] = await Promise.all([
       supabase
         .from('services')
@@ -450,6 +451,15 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         .gte('scheduled_at', new Date().toISOString())
         .lte('scheduled_at', now7d)
         .in('status', ['pending', 'confirmed']),
+      supabase
+        .from('bookings')
+        .select('id, scheduled_at, services(name)')
+        .eq('business_id', business.id)
+        .eq('client_id', client.id)
+        .in('status', ['confirmed', 'pending'])
+        .gt('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(5),
     ])
 
     // Load master specializations (separate query after masters are known)
@@ -463,6 +473,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     if (kbError) logError(businessId, 'DB error loading knowledge_items:', kbError)
     if (histError) logError(businessId, `DB error loading history (client=${client.id}):`, histError)
     if (bookError) logError(businessId, 'DB error loading upcoming bookings:', bookError)
+    if (clientBookError) logError(businessId, 'DB error loading client bookings:', clientBookError)
 
     // Format booked slots for AI context
     const bookedSlots = (upcomingBookings ?? []).map((b) => {
@@ -502,6 +513,16 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     // Client name: prefer preferred_name, then first_name
     const clientName = client.preferred_name || client.first_name || null
 
+    // Map client's upcoming bookings for reschedule support
+    const clientUpcomingBookings = (clientBookings ?? []).map((b) => {
+      const svc = Array.isArray(b.services) ? b.services[0] : b.services
+      return {
+        id: b.id as string,
+        scheduled_at: b.scheduled_at as string,
+        service_name: (svc as { name?: string } | null)?.name ?? null,
+      }
+    })
+
     let reply: string
 
     // Step 8: Call AI
@@ -516,6 +537,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
           bookedSlots,
           clientName,
           availableSlots,
+          clientUpcomingBookings,
         },
         ((history as Message[]) ?? []).reverse(),
         ctx.message.text,

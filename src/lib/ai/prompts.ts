@@ -5,6 +5,12 @@ const DAY_NAMES: Record<string, string> = {
   fri: 'Пятница', sat: 'Суббота', sun: 'Воскресенье',
 }
 
+export interface ClientBookingRef {
+  id: string
+  scheduled_at: string
+  service_name: string | null
+}
+
 export interface BusinessContext {
   business: Business
   services: Service[]
@@ -13,10 +19,11 @@ export interface BusinessContext {
   bookedSlots?: string[] // formatted busy slots for next 7 days
   clientName?: string | null
   availableSlots?: string[]
+  clientUpcomingBookings?: ClientBookingRef[]
 }
 
 export function buildSystemPrompt(ctx: BusinessContext): string {
-  const { business, services, masters, knowledgeItems, bookedSlots, clientName, availableSlots } = ctx
+  const { business, services, masters, knowledgeItems, bookedSlots, clientName, availableSlots, clientUpcomingBookings } = ctx
 
   const servicesText = services.length
     ? services
@@ -66,6 +73,15 @@ export function buildSystemPrompt(ctx: BusinessContext): string {
     ? `\nДОСТУПНЫЕ ОКНА:\n${availableSlots.join('\n')}\nПри вопросе о времени — показывай нумерованным списком. Когда клиент выбирает — вызывай create_booking.\n`
     : ''
 
+  const clientBookingsText = clientUpcomingBookings && clientUpcomingBookings.length
+    ? `\nЗАПИСИ КЛИЕНТА (предстоящие):\n${clientUpcomingBookings.map((b, i) => {
+        const dt = new Date(b.scheduled_at).toLocaleString('ru-RU', {
+          weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz,
+        })
+        return `${i + 1}. [ID:${b.id}] ${dt}${b.service_name ? ` — ${b.service_name}` : ''}`
+      }).join('\n')}\nЕсли клиент хочет перенести запись — уточни новое время и вызови reschedule_booking.\n`
+    : ''
+
   return `Ты — AI-ассистент записи для бизнеса "${business.name}". Отвечаешь клиентам в Telegram.
 Сейчас: ${now} (часовой пояс бизнеса).
 
@@ -76,7 +92,8 @@ export function buildSystemPrompt(ctx: BusinessContext): string {
    б) мастера (если мастеров БОЛЬШЕ ОДНОГО — спроси, покажи нумерованный список)
    в) время из ДОСТУПНЫХ ОКОН
    Вызывай create_booking ТОЛЬКО когда а+б+в уточнены.
-3. Быть вежливым, кратким и по делу
+3. Помогать перенести запись: если клиент хочет перенести — уточни новое время из ДОСТУПНЫХ ОКОН и вызови reschedule_booking.
+4. Быть вежливым, кратким и по делу
 
 БИЗНЕС: ${business.name}
 ${business.description ? `Описание: ${business.description}` : ''}
@@ -88,7 +105,7 @@ ${servicesText}
 
 МАСТЕРА:
 ${mastersText}
-${workingHoursText}${slotsText}${availableSlotsText}
+${workingHoursText}${slotsText}${availableSlotsText}${clientBookingsText}
 ${faqText ? `ЧАСТЫЕ ВОПРОСЫ:\n${faqText}\n` : ''}
 ПРАВИЛА:
 - Всегда отвечай на русском языке

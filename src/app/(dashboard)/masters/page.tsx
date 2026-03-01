@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 import { AddMasterForm, MasterRow } from './_form'
-import type { Master, Service } from '@/types/database'
+import type { Master, Service, BusinessSettings } from '@/types/database'
 
 export default async function MastersPage() {
   const user = await getCurrentUser()
@@ -34,6 +34,8 @@ export default async function MastersPage() {
     serviceIds: masterServiceMap[m.id] ?? [],
   }))
 
+  const timezone = (business.settings as BusinessSettings | null)?.timezone ?? 'Europe/Moscow'
+
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -50,6 +52,7 @@ export default async function MastersPage() {
             master={master}
             businessId={business.id}
             services={services as Service[] ?? []}
+            timezone={timezone}
           />
         ))}
         {enrichedMasters.length === 0 && (
