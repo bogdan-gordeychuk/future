@@ -4,6 +4,7 @@ import { processMessage } from '@/lib/ai/engine'
 import { checkRateLimit } from './rate-limiter'
 import { decryptToken } from '@/lib/crypto'
 import { handleAdminMessage } from './admin-handler'
+import { guardContent, guardCategoryLabel } from './content-guard'
 import type { Business, Service, Master, KnowledgeItem, Client, Message, BusinessSettings } from '@/types/database'
 
 // Cache bot instances: businessId → Bot
@@ -258,6 +259,29 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         logError(businessId, 'Admin handler error:', err)
         await ctx.reply('Произошла ошибка. Попробуйте позже.')
       }
+      return
+    }
+
+    // Content guard: block injection / jailbreak / exfiltration before any AI call
+    const guard = guardContent(ctx.message.text)
+    if (!guard.safe) {
+      log(businessId, `content guard blocked: category=${guard.category} tgUser=${telegramUserId}`)
+      // Notify owner silently (fire-and-forget)
+      if (notifIdCheck && business.telegram_bot_token) {
+        const plainToken = decryptToken(business.telegram_bot_token)
+        const clientInfo = ctx.from?.username
+          ? `@${ctx.from.username}`
+          : `ID: ${telegramUserId}`
+        fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: notifIdCheck,
+            text: `⚠️ Подозрительное сообщение\nТип: ${guardCategoryLabel(guard.category!)}\nОт: ${clientInfo}\nТекст: «${ctx.message.text.slice(0, 120)}»`,
+          }),
+        }).catch(() => {})
+      }
+      await ctx.reply('Прошу прощения?')
       return
     }
 
