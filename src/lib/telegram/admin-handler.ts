@@ -248,33 +248,29 @@ async function handleSetTimeOff(
     return `Мастер "${input.master_name}" не найден. Доступные: ${masters.map((m) => m.name).join(', ')}`
   }
 
-  // Generate date range
+  // Validate dates
   const start = new Date(input.date_from)
   const end = new Date(input.date_to)
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
     return 'Неверный формат даты. Используйте YYYY-MM-DD.'
   }
-
-  const rows: { master_id: string; business_id: string; date: string; is_blocked: boolean; reason: string | null }[] = []
-  const cur = new Date(start)
-  while (cur <= end) {
-    rows.push({
-      master_id: master.id,
-      business_id: businessId,
-      date: cur.toISOString().slice(0, 10),
-      is_blocked: true,
-      reason: input.reason ?? null,
-    })
-    cur.setDate(cur.getDate() + 1)
+  if (end < start) {
+    return 'Дата окончания раньше даты начала.'
   }
 
   const { error } = await supabase
     .from('master_time_off')
-    .upsert(rows, { onConflict: 'master_id,date' })
+    .insert({
+      master_id: master.id,
+      business_id: businessId,
+      date_from: input.date_from,
+      date_to: input.date_to,
+      reason: input.reason ?? null,
+    })
 
   if (error) return `Ошибка: ${error.message}`
 
-  const dayCount = rows.length
+  const dayCount = Math.round((end.getTime() - start.getTime()) / 86400000) + 1
   return `Выходной для ${master.name} установлен с ${input.date_from} по ${input.date_to} (${dayCount} ${dayCount === 1 ? 'день' : dayCount < 5 ? 'дня' : 'дней'})${input.reason ? `. Причина: ${input.reason}` : ''}.`
 }
 
