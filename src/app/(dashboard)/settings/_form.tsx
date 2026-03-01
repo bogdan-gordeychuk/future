@@ -30,6 +30,7 @@ interface Props {
   slug: string | null
   timezone: string
   notificationTelegramId: string
+  notificationChatId: string
   workingHours: BusinessSettings['working_hours']
   hasToken: boolean
   maskedToken: string | null
@@ -52,7 +53,7 @@ const TIMEZONES = [
 ]
 
 export default function SettingsForm({
-  businessId, name, description, phone, address, city, slug, timezone, notificationTelegramId, workingHours, hasToken, maskedToken, webhookConnected, botUsername,
+  businessId, name, description, phone, address, city, slug, timezone, notificationTelegramId, notificationChatId, workingHours, hasToken, maskedToken, webhookConnected, botUsername,
 }: Props) {
   const router = useRouter()
   const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
@@ -128,10 +129,16 @@ export default function SettingsForm({
             </select>
           </div>
           <Field
-            label="Telegram ID для уведомлений о записях"
+            label="Telegram ID администратора (для команд боту)"
             name="notification_telegram_id"
             defaultValue={notificationTelegramId}
             placeholder="123456789 — узнать через @userinfobot"
+          />
+          <Field
+            label="Chat ID для уведомлений (необязательно)"
+            name="notification_chat_id"
+            defaultValue={notificationChatId}
+            placeholder="Если пусто — уведомления идут на ID администратора"
           />
 
           {/* Working hours hidden inputs */}

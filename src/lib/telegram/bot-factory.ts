@@ -249,8 +249,10 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     }
 
     // Admin check: if sender is the notification_telegram_id owner, route to admin pipeline
-    const notifIdCheck = (business.settings as { notification_telegram_id?: string | null } | null)
-      ?.notification_telegram_id
+    const notifSettings = business.settings as { notification_telegram_id?: string | null; notification_chat_id?: string | null } | null
+    const notifIdCheck = notifSettings?.notification_telegram_id
+    // notification_chat_id = where passive notifications are sent (fallback to admin identity)
+    const notifChatId = notifSettings?.notification_chat_id ?? notifIdCheck
     if (notifIdCheck && ctx.from.id.toString() === notifIdCheck) {
       log(businessId, `admin message from tgUser=${telegramUserId}`)
       try {
@@ -267,7 +269,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     if (!guard.safe) {
       log(businessId, `content guard blocked: category=${guard.category} tgUser=${telegramUserId}`)
       // Notify owner silently (fire-and-forget)
-      if (notifIdCheck && business.telegram_bot_token) {
+      if (notifChatId && business.telegram_bot_token) {
         const plainToken = decryptToken(business.telegram_bot_token)
         const clientInfo = ctx.from?.username
           ? `@${ctx.from.username}`
@@ -276,7 +278,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: notifIdCheck,
+            chat_id: notifChatId,
             text: `⚠️ Подозрительное сообщение\nТип: ${guardCategoryLabel(guard.category!)}\nОт: ${clientInfo}\nТекст: «${ctx.message.text.slice(0, 120)}»`,
           }),
         }).catch(() => {})
@@ -297,16 +299,14 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     if (trialExpiredByDate || subExpired) {
       log(businessId, `access blocked: trialByDate=${trialExpiredByDate} subExpired=${subExpired}`)
       // Notify owner, not client — client gets generic fallback
-      const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
-        ?.notification_telegram_id
-      if (notifId && notifId !== telegramUserId.toString()) {
+      if (notifChatId && notifIdCheck !== telegramUserId.toString()) {
         const plainToken = decryptToken(business.telegram_bot_token!)
         const reason = trialExpiredByDate ? 'истёк пробный период' : 'подписка отменена/истекла'
         fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: notifId,
+            chat_id: notifChatId,
             text: `⚠️ Бот не может ответить клиенту — ${reason}.\nСообщение клиента: «${ctx.message.text}»\n\nОформите подписку в личном кабинете: ${process.env.NEXT_PUBLIC_APP_URL}/billing`,
           }),
         }).catch(() => {})
@@ -341,9 +341,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         `limit exceeded: plan=${subscription.plan} used=${subscription.messages_used}/${subscription.messages_limit}`
       )
       // Notify owner silently — client gets generic fallback, no mention of limits
-      const notifId = (business.settings as { notification_telegram_id?: string | null } | null)
-        ?.notification_telegram_id
-      if (notifId && notifId !== telegramUserId.toString()) {
+      if (notifChatId && notifIdCheck !== telegramUserId.toString()) {
         const plainToken = decryptToken(business.telegram_bot_token!)
         const reason = isTrial
           ? `исчерпан лимит пробного периода (${subscription.messages_used}/${subscription.messages_limit} сообщений)`
@@ -352,7 +350,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: notifId,
+            chat_id: notifChatId,
             text: `⚠️ AI-ассистент отключён — ${reason}.\nСообщение клиента: «${ctx.message.text}»\n\n${isTrial ? `Оформите подписку: ${process.env.NEXT_PUBLIC_APP_URL}/billing` : `Обновите подписку: ${process.env.NEXT_PUBLIC_APP_URL}/billing`}`,
           }),
         }).catch(() => {})
@@ -504,10 +502,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       )
 
       // Notify business owner on booking intent
-      const notifId = (
-        business.settings as { notification_telegram_id?: string | null } | null
-      )?.notification_telegram_id
-      if (notifId && notifId !== telegramUserId.toString() && (result.bookingCreated || result.intent === 'booking')) {
+      if (notifChatId && notifIdCheck !== telegramUserId.toString() && (result.bookingCreated || result.intent === 'booking')) {
         const clientDisplayName =
           [client.first_name, client.last_name].filter(Boolean).join(' ') ||
           (ctx.from?.username ? `@${ctx.from.username}` : 'Клиент')
@@ -517,7 +512,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: notifId, text: notifText }),
+          body: JSON.stringify({ chat_id: notifChatId, text: notifText }),
         }).catch((err) => logError(businessId, 'Telegram notification send error:', err))
       }
 
@@ -759,11 +754,11 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       .single<{ settings: unknown; telegram_bot_token: string | null }>()
 
     if (business) {
-      const notifId = (
-        business.settings as { notification_telegram_id?: string | null } | null
-      )?.notification_telegram_id
+      const cancelSettings = business.settings as { notification_telegram_id?: string | null; notification_chat_id?: string | null } | null
+      const cancelAdminId = cancelSettings?.notification_telegram_id
+      const cancelChatId = cancelSettings?.notification_chat_id ?? cancelAdminId
 
-      if (notifId && notifId !== telegramUserId.toString()) {
+      if (cancelChatId && cancelAdminId !== telegramUserId.toString()) {
         const clientDisplayName =
           [client.first_name, client.last_name].filter(Boolean).join(' ') ||
           (ctx.from?.username ? `@${ctx.from.username}` : 'Клиент')
@@ -780,7 +775,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: notifId, text: notifText }),
+          body: JSON.stringify({ chat_id: cancelChatId, text: notifText }),
         }).catch((err) => logError(businessId, 'Telegram cancellation notification error:', err))
       }
     }

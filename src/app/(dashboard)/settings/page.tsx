@@ -39,6 +39,7 @@ export default async function SettingsPage() {
         slug={business.slug ?? null}
         timezone={settings?.timezone ?? ''}
         notificationTelegramId={settings?.notification_telegram_id ?? ''}
+        notificationChatId={settings?.notification_chat_id ?? ''}
         workingHours={workingHours}
         hasToken={!!business.telegram_bot_token}
         maskedToken={business.telegram_bot_token ? maskToken(business.telegram_bot_token) : null}
