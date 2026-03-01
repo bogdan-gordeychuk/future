@@ -1,6 +1,6 @@
 # VIKA — Мастер-план
 
-> Последнее обновление: 2026-02-28
+> Последнее обновление: 2026-03-01
 > Архитектор: Claude Sonnet 4.6
 > CTO: Богдан (approves decisions)
 
@@ -47,6 +47,9 @@
 | Ограничение длины сообщения | ✅ | 1000 символов, защита от token flooding |
 | Мобильная адаптация дашборда | ✅ | Mobile header + bottom nav |
 | Bot cache инвалидация | ✅ | При смене токена |
+| **Admin bot mode** | ✅ | Владелец пишет боту → Claude Haiku: list_bookings, set_master_time_off, cancel_booking |
+| **Публичная страница /b/[slug]** | ✅ | ISR, услуги, мастера, QR-код, CTA в Telegram |
+| **businesses.slug** | ✅ | Auto-generated (12 hex chars UUID), migration 006 |
 
 ---
 
@@ -55,6 +58,8 @@
 ```
 Сообщение от клиента
   → rate limit (10/min) → "Подождите"
+  → fetch business
+  → ЕСЛИ sender == notification_telegram_id → admin pipeline (Claude Haiku, 3 tools) → return
   → trial истёк по дате → "Пробный период закончился..."
   → sub expired/cancelled → "Доступ приостановлен..."
   → trial/paid лимит сообщений исчерпан → соответствующий текст
@@ -127,7 +132,7 @@
 ### P2 — Рост
 - [ ] **Второй тариф** — 790 ₽ / 300 сообщений (для частных мастеров)
 - [ ] **Онлайн-оплата клиентом через бота** — снижает no-show
-- [ ] **Публичная страница** — /b/slug с QR-кодом
+- [x] **Публичная страница** — /b/[slug] с QR-кодом ✅ Sprint 9
 - [ ] **Email/SMS напоминания** — резерв на случай проблем с Telegram
 - [ ] **Годовой план** со скидкой 20%
 
@@ -180,6 +185,20 @@
 - [ ] Уведомление Роскомнадзора (перед PR-кампанией)
 
 ---
+
+## Последние изменения (2026-03-01, Sprint 9)
+
+| Изменение | Файл(ы) | Тип |
+|-----------|---------|-----|
+| Admin bot mode: владелец пишет своему боту, Claude Haiku обрабатывает 3 команды | `admin-handler.ts` + `bot-factory.ts` | Новая фича |
+| `list_bookings(date)` — записи на дату в формате таблицы | `admin-handler.ts` | Новая фича |
+| `set_master_time_off(name, from, to, reason?)` — выходные мастера из бота | `admin-handler.ts` | Новая фича |
+| `cancel_booking(...)` — отмена записи + уведомление клиента | `admin-handler.ts` | Новая фича |
+| Admin-трафик не тратит `messages_used` | `bot-factory.ts` | Продукт |
+| Публичная страница `/b/[slug]` — ISR 1h, услуги, мастера, QR, CTA | `app/b/[slug]/page.tsx` | Новая фича |
+| `businesses.slug` — auto-generated 12-hex chars, migration 006 | `006_business_slug.sql` | БД |
+| Settings: секция "Публичная страница" с URL + кнопка копирования | `settings/_form.tsx` | UX |
+| `Business` interface: добавлен `slug: string \| null` | `types/database.ts` | Типы |
 
 ## Последние изменения (2026-02-28, Sprint 8 fixes)
 
