@@ -206,6 +206,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         welcome += '\n\nНапишите что вас интересует — я отвечу на ваши вопросы и помогу записаться.'
       }
 
+      welcome += '\n\n— Работает на VIKA.ai'
       log(businessId, `/start: smart welcome to tgUser=${ctx.from?.id} services=${services?.length ?? 0}`)
       await ctx.reply(welcome)
     } catch (err) {

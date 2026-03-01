@@ -33,6 +33,7 @@ export default async function DashboardPage() {
     { count: messagesMonth },
     { count: servicesCount },
     { data: upcomingBookings },
+    { data: monthBookings },
   ] = await Promise.all([
     supabase
       .from('bookings')
@@ -63,7 +64,20 @@ export default async function DashboardPage() {
       .gte('scheduled_at', new Date().toISOString())
       .order('scheduled_at', { ascending: true })
       .limit(5),
+    supabase
+      .from('bookings')
+      .select('services(price_kopecks)')
+      .eq('business_id', business.id)
+      .in('status', ['confirmed', 'completed'])
+      .gte('scheduled_at', monthStart),
   ])
+
+  const revenueKopecks = (monthBookings ?? []).reduce((sum, b) => {
+    const svc = Array.isArray(b.services) ? b.services[0] : b.services
+    return sum + ((svc as { price_kopecks?: number } | null)?.price_kopecks ?? 0)
+  }, 0)
+  const revenueRubles = Math.round(revenueKopecks / 100)
+  const monthBookingsCount = (monthBookings ?? []).length
 
   const bizSettings = business.settings as { notification_telegram_id?: string | null } | null
   const setupSteps = [
@@ -86,6 +100,16 @@ export default async function DashboardPage() {
         <StatCard label="Клиентов всего" value={totalClients ?? 0} />
         <StatCard label="Сообщений за месяц" value={messagesMonth ?? 0} />
       </div>
+
+      {monthBookingsCount > 0 && (
+        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-5 mb-6">
+          <p className="text-xs text-emerald-600 font-medium uppercase tracking-wide mb-1">Выручка через бота за месяц</p>
+          <p className="text-3xl font-semibold text-emerald-900">
+            {revenueRubles.toLocaleString('ru-RU')} ₽
+          </p>
+          <p className="text-sm text-emerald-700 mt-1">{monthBookingsCount} {monthBookingsCount === 1 ? 'запись' : monthBookingsCount < 5 ? 'записи' : 'записей'}</p>
+        </div>
+      )}
 
       {upcomingBookings && upcomingBookings.length > 0 && (
         <div className="rounded-xl bg-white p-6 shadow-sm mb-6">
