@@ -24,6 +24,7 @@ export async function updateBusiness(
   const notifChatId = (formData.get('notification_chat_id') as string)?.trim() || null
   const timezone = (formData.get('timezone') as string)?.trim() || null
   const autoReplyEnabled = formData.get('auto_reply_enabled') === '1'
+  const requireMasterSelection = formData.get('require_master_selection') === '1'
 
   // Parse working_hours from FormData
   const workingHoursEntries = WORKING_HOURS_DAYS.map(day => {
@@ -47,6 +48,7 @@ export async function updateBusiness(
     ...(timezone ? { timezone } : {}),
     working_hours,
     auto_reply_enabled: autoReplyEnabled,
+    require_master_selection: requireMasterSelection,
   }
 
   const { error } = await supabase
@@ -188,4 +190,81 @@ export async function getWebhookInfo(businessId: string): Promise<{
     lastError: data.result.last_error_message,
     pendingCount: data.result.pending_update_count,
   }
+}
+
+export async function freezeAccount(): Promise<{ error: string | null; success: boolean }> {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { error: 'Не авторизован', success: false }
+
+  const { error } = await supabase
+    .from('businesses')
+    .update({ subscription_status: 'frozen' })
+    .eq('owner_id', session.user.id)
+
+  if (error) return { error: error.message, success: false }
+  revalidatePath('/billing')
+  return { error: null, success: true }
+}
+
+export async function unfreezeAccount(): Promise<{ error: string | null; success: boolean }> {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { error: 'Не авторизован', success: false }
+
+  // Restore to trial if trial_ends_at is in the future, otherwise expired
+  const { data: biz } = await supabase
+    .from('businesses')
+    .select('trial_ends_at')
+    .eq('owner_id', session.user.id)
+    .single()
+
+  const newStatus = biz?.trial_ends_at && new Date(biz.trial_ends_at) > new Date()
+    ? 'trial'
+    : 'expired'
+
+  const { error } = await supabase
+    .from('businesses')
+    .update({ subscription_status: newStatus })
+    .eq('owner_id', session.user.id)
+
+  if (error) return { error: error.message, success: false }
+  revalidatePath('/billing')
+  return { error: null, success: true }
+}
+
+export async function deleteAccount(): Promise<{ error: string | null; success: boolean }> {
+  const supabase = await createClient()
+  const serviceSupabase = await createServiceClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { error: 'Не авторизован', success: false }
+
+  // Get business to deactivate Telegram webhook before deleting
+  const { data: biz } = await supabase
+    .from('businesses')
+    .select('id, telegram_bot_token')
+    .eq('owner_id', session.user.id)
+    .single()
+
+  // Delete Telegram webhook (best-effort, don't fail if it errors)
+  if (biz?.telegram_bot_token) {
+    try {
+      const plainToken = decryptToken(biz.telegram_bot_token)
+      await fetch(`https://api.telegram.org/bot${plainToken}/deleteWebhook`, { method: 'POST' })
+      if (biz.id) invalidateBotCache(biz.id)
+    } catch {
+      // Non-critical
+    }
+  }
+
+  // Delete business (cascades to all related data via ON DELETE CASCADE)
+  if (biz?.id) {
+    await serviceSupabase.from('businesses').delete().eq('id', biz.id)
+  }
+
+  // Delete auth user
+  const { error } = await serviceSupabase.auth.admin.deleteUser(session.user.id)
+  if (error) return { error: error.message, success: false }
+
+  return { error: null, success: true }
 }

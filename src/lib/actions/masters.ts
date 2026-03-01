@@ -17,15 +17,25 @@ export async function createMaster(_prev: Result, formData: FormData): Promise<R
 
   const businessId = formData.get('business_id') as string
   const name = (formData.get('name') as string).trim()
+  const level = (formData.get('level') as string | null)?.trim() || null
+  const serviceIds = formData.getAll('service_ids') as string[]
+
   if (!name) return { error: 'Введите имя мастера', success: false }
 
-  const { error } = await supabase.from('masters').insert({
-    business_id: businessId,
-    name,
-    is_active: true,
-  })
+  const { data: master, error } = await supabase
+    .from('masters')
+    .insert({ business_id: businessId, name, level, is_active: true })
+    .select('id')
+    .single()
 
-  if (error) return { error: error.message, success: false }
+  if (error || !master) return { error: error?.message ?? 'Ошибка создания', success: false }
+
+  if (serviceIds.length > 0) {
+    await supabase.from('master_services').insert(
+      serviceIds.map((service_id) => ({ master_id: master.id, service_id }))
+    )
+  }
+
   revalidatePath('/masters')
   return { error: null, success: true }
 }
@@ -37,15 +47,27 @@ export async function updateMaster(_prev: Result, formData: FormData): Promise<R
   const id = formData.get('id') as string
   const businessId = formData.get('business_id') as string
   const name = (formData.get('name') as string).trim()
+  const level = (formData.get('level') as string | null)?.trim() || null
+  const serviceIds = formData.getAll('service_ids') as string[]
+
   if (!name) return { error: 'Введите имя мастера', success: false }
 
   const { error } = await supabase
     .from('masters')
-    .update({ name })
+    .update({ name, level })
     .eq('id', id)
     .eq('business_id', businessId)
 
   if (error) return { error: error.message, success: false }
+
+  // Replace specializations: delete old, insert new
+  await supabase.from('master_services').delete().eq('master_id', id)
+  if (serviceIds.length > 0) {
+    await supabase.from('master_services').insert(
+      serviceIds.map((service_id) => ({ master_id: id, service_id }))
+    )
+  }
+
   revalidatePath('/masters')
   return { error: null, success: true }
 }

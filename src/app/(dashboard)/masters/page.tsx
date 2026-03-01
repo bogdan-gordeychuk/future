@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 import { AddMasterForm, MasterRow } from './_form'
-import type { Master } from '@/types/database'
+import type { Master, Service } from '@/types/database'
 
 export default async function MastersPage() {
   const user = await getCurrentUser()
@@ -12,11 +12,27 @@ export default async function MastersPage() {
   if (!business) redirect('/dashboard')
 
   const supabase = await createClient()
-  const { data: masters } = await supabase
-    .from('masters')
-    .select('*')
-    .eq('business_id', business.id)
-    .order('created_at')
+  const [
+    { data: masters },
+    { data: services },
+    { data: masterServicesRows },
+  ] = await Promise.all([
+    supabase.from('masters').select('*').eq('business_id', business.id).order('created_at'),
+    supabase.from('services').select('id, name').eq('business_id', business.id).eq('is_active', true).order('sort_order'),
+    supabase.from('master_services').select('master_id, service_id'),
+  ])
+
+  // Build map: master_id → service_id[]
+  const masterServiceMap: Record<string, string[]> = {}
+  for (const row of (masterServicesRows ?? [])) {
+    if (!masterServiceMap[row.master_id]) masterServiceMap[row.master_id] = []
+    masterServiceMap[row.master_id].push(row.service_id)
+  }
+
+  const enrichedMasters: Master[] = (masters as Master[] ?? []).map((m) => ({
+    ...m,
+    serviceIds: masterServiceMap[m.id] ?? [],
+  }))
 
   return (
     <div>
@@ -28,17 +44,22 @@ export default async function MastersPage() {
       </div>
 
       <div className="space-y-3 mb-6">
-        {(masters as Master[] ?? []).map((master) => (
-          <MasterRow key={master.id} master={master} businessId={business.id} />
+        {enrichedMasters.map((master) => (
+          <MasterRow
+            key={master.id}
+            master={master}
+            businessId={business.id}
+            services={services as Service[] ?? []}
+          />
         ))}
-        {(!masters || masters.length === 0) && (
+        {enrichedMasters.length === 0 && (
           <div className="rounded-xl bg-white p-8 shadow-sm text-center">
             <p className="text-zinc-400 text-sm">Мастеров пока нет. Добавьте первого.</p>
           </div>
         )}
       </div>
 
-      <AddMasterForm businessId={business.id} />
+      <AddMasterForm businessId={business.id} services={services as Service[] ?? []} />
     </div>
   )
 }

@@ -41,6 +41,7 @@ export default async function SettingsPage() {
         notificationTelegramId={settings?.notification_telegram_id ?? ''}
         notificationChatId={settings?.notification_chat_id ?? ''}
         autoReplyEnabled={settings?.auto_reply_enabled ?? true}
+        requireMasterSelection={settings?.require_master_selection ?? true}
         workingHours={workingHours}
         hasToken={!!business.telegram_bot_token}
         maskedToken={business.telegram_bot_token ? maskToken(business.telegram_bot_token) : null}

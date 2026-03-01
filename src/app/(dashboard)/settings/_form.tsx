@@ -32,6 +32,7 @@ interface Props {
   notificationTelegramId: string
   notificationChatId: string
   autoReplyEnabled: boolean
+  requireMasterSelection: boolean
   workingHours: BusinessSettings['working_hours']
   hasToken: boolean
   maskedToken: string | null
@@ -54,7 +55,7 @@ const TIMEZONES = [
 ]
 
 export default function SettingsForm({
-  businessId, name, description, phone, address, city, slug, timezone, notificationTelegramId, notificationChatId, autoReplyEnabled, workingHours, hasToken, maskedToken, webhookConnected, botUsername,
+  businessId, name, description, phone, address, city, slug, timezone, notificationTelegramId, notificationChatId, autoReplyEnabled, requireMasterSelection, workingHours, hasToken, maskedToken, webhookConnected, botUsername,
 }: Props) {
   const router = useRouter()
   const [infoState, infoAction, infoPending] = useActionState(updateBusiness, { error: null, success: false })
@@ -156,6 +157,22 @@ export default function SettingsForm({
             </label>
             <input type="hidden" name="auto_reply_enabled" value="0" />
             <span className="text-xs text-zinc-400">Снимите, чтобы временно остановить</span>
+          </div>
+
+          {/* Master selection toggle */}
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                name="require_master_selection"
+                value="1"
+                defaultChecked={requireMasterSelection}
+                className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+              />
+              <span className="text-sm text-zinc-700">Бот спрашивает клиента о выборе мастера</span>
+            </label>
+            <input type="hidden" name="require_master_selection" value="0" />
+            <span className="text-xs text-zinc-400">Снимите, если мастер один или клиенты и так знают к кому</span>
           </div>
 
           {/* Working hours hidden inputs */}

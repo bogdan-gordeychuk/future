@@ -1,7 +1,7 @@
 // Auto-generated types for Supabase tables
 // Update after schema changes with: npx supabase gen types typescript
 
-export type SubscriptionStatus = 'trial' | 'active' | 'cancelled' | 'expired'
+export type SubscriptionStatus = 'trial' | 'active' | 'cancelled' | 'expired' | 'frozen'
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show'
 export type MessageRole = 'user' | 'assistant' | 'system'
 export type SubscriptionPlan = 'trial' | 'starter' | 'pro'
@@ -14,6 +14,7 @@ export interface WorkingHoursDay {
 
 export interface BusinessSettings {
   auto_reply_enabled: boolean
+  require_master_selection?: boolean  // if false, bot picks first available master without asking
   welcome_message: string
   escalation_keywords: string[]
   notification_telegram_id?: string | null  // admin identity (who can send admin commands)
@@ -72,9 +73,12 @@ export interface Master {
   id: string
   business_id: string
   name: string
+  level: string | null        // job title, e.g. "Старший барбер"
   telegram_user_id: number | null
   is_active: boolean
   created_at: string
+  // Runtime-only: populated from master_services join, not a DB column
+  serviceIds?: string[]
 }
 
 export interface WorkingHours {

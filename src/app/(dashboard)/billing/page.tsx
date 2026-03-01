@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 import { createClient } from '@/lib/supabase/server'
 import { startSubscription } from '@/lib/actions/billing'
+import { AccountActions } from './_account-actions'
 
 export default async function BillingPage({
   searchParams,
@@ -30,7 +31,8 @@ export default async function BillingPage({
   const trialDaysLeft = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / 86400000))
   const isTrial = business.subscription_status === 'trial'
   const isActive = business.subscription_status === 'active'
-  const isExpired = !isTrial && !isActive
+  const isFrozen = business.subscription_status === 'frozen'
+  const isExpired = !isTrial && !isActive && !isFrozen
 
   const periodEnd = sub?.period_end ? new Date(sub.period_end) : null
   const periodDaysLeft = periodEnd
@@ -148,6 +150,8 @@ export default async function BillingPage({
           </p>
         )}
       </div>
+
+      <AccountActions isFrozen={isFrozen} />
     </div>
   )
 }

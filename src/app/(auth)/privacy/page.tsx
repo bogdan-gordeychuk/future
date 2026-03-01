@@ -3,15 +3,25 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-zinc-50 py-12 px-4">
       <div className="max-w-2xl mx-auto bg-white rounded-2xl p-8 shadow-sm">
         <h1 className="text-2xl font-semibold text-zinc-900 mb-2">Политика конфиденциальности</h1>
-        <p className="text-sm text-zinc-400 mb-8">Последнее обновление: 27 февраля 2026</p>
+        <p className="text-sm text-zinc-400 mb-8">Последнее обновление: 2 марта 2026</p>
 
         <div className="prose prose-sm text-zinc-600 space-y-6">
           <section>
-            <h2 className="text-base font-semibold text-zinc-900 mb-2">1. Кто мы</h2>
+            <h2 className="text-base font-semibold text-zinc-900 mb-2">1. Стороны и роли</h2>
             <p>
-              ВИКА — сервис AI-ассистента для онлайн-записи клиентов через Telegram.
-              Оператор персональных данных: Гордейчук Богдан, самозанятый.
+              ВИКА — платформа для автоматизации функции администратора и онлайн-записи клиентов
+              через Telegram. Правообладатель: Гордейчук Богдан, самозанятый.
               Контакт: <a href="mailto:comedi4@gmail.com" className="text-zinc-900 underline">comedi4@gmail.com</a>
+            </p>
+            <p className="mt-3">
+              <strong>Владельцы бизнеса (Заказчики)</strong> — пользователи, которые регистрируются
+              на платформе ВИКА. В отношении их данных ВИКА является <strong>оператором</strong>{' '}
+              персональных данных согласно 152-ФЗ.
+            </p>
+            <p className="mt-3">
+              <strong>Клиенты бизнеса</strong> — лица, которые общаются с Telegram-ботом Заказчика.
+              В отношении их данных ВИКА является <strong>обработчиком</strong> по поручению
+              Заказчика (оператора). Ответственность перед клиентами бизнеса несёт Заказчик.
             </p>
           </section>
 
@@ -21,15 +31,19 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 mt-1 space-y-1">
               <li>Email-адрес (для входа в систему)</li>
               <li>Название бизнеса, описание, адрес, телефон (вводятся вручную)</li>
-              <li>Токен Telegram-бота (хранится в зашифрованном виде)</li>
+              <li>Токен Telegram-бота (хранится в зашифрованном виде AES-256)</li>
             </ul>
-            <p className="mt-3"><strong>Данные клиентов бизнеса (через Telegram):</strong></p>
+            <p className="mt-3"><strong>Данные клиентов бизнеса (через Telegram-бот):</strong></p>
             <ul className="list-disc pl-5 mt-1 space-y-1">
-              <li>Telegram ID, имя, фамилия, username (публичные данные Telegram)</li>
-              <li>Номер телефона (только если клиент сам его сообщил боту)</li>
+              <li>Telegram ID (технический идентификатор)</li>
+              <li>Имя (только то, которое клиент сообщил боту сам)</li>
               <li>История переписки с ботом</li>
-              <li>Данные о записях (услуга, мастер, дата)</li>
+              <li>Данные о записях: услуга, специалист, дата и время</li>
             </ul>
+            <p className="mt-3 text-zinc-500 text-xs">
+              Мы не собираем фамилии, номера телефонов (если клиент не сообщил их сам),
+              платёжные данные клиентов бизнеса. Суммы фактических оплат нам неизвестны.
+            </p>
           </section>
 
           <section>
@@ -38,7 +52,7 @@ export default function PrivacyPage() {
               <li>Обеспечение работы сервиса онлайн-записи</li>
               <li>AI-обработка сообщений для ответов клиентам бизнеса</li>
               <li>Отправка напоминаний о записях</li>
-              <li>Улучшение качества сервиса</li>
+              <li>Аналитика для владельца бизнеса (только его собственные данные)</li>
             </ul>
           </section>
 
@@ -52,29 +66,40 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-zinc-900 mb-2">5. Третьи стороны</h2>
-            <ul className="list-disc pl-5 space-y-1">
+            <h2 className="text-base font-semibold text-zinc-900 mb-2">5. Третьи стороны (субпроцессоры)</h2>
+            <p>Данные передаются только следующим субпроцессорам в целях работы сервиса:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
               <li><strong>Supabase</strong> — хранение данных (EU GDPR compliant)</li>
-              <li><strong>Anthropic</strong> — обработка сообщений AI (тексты диалогов)</li>
+              <li><strong>Anthropic</strong> — AI-обработка текстов диалогов</li>
               <li><strong>Telegram</strong> — доставка сообщений</li>
-              <li><strong>YooKassa</strong> — обработка платежей (платёжные данные мы не храним)</li>
+              <li><strong>YooKassa</strong> — обработка платежей подписки (платёжные данные мы не храним)</li>
             </ul>
+            <p className="mt-3">
+              Данные не передаются иным третьим лицам, за исключением случаев, прямо
+              предусмотренных законодательством Российской Федерации.
+            </p>
           </section>
 
           <section>
             <h2 className="text-base font-semibold text-zinc-900 mb-2">6. Ваши права</h2>
-            <p>
-              Вы можете запросить удаление своих данных, написав на{' '}
-              <a href="mailto:comedi4@gmail.com" className="text-zinc-900 underline">comedi4@gmail.com</a>.
-              Данные удаляются в течение 30 дней.
-            </p>
+            <p><strong>Владельцы бизнеса (Заказчики) вправе:</strong></p>
+            <ul className="list-disc pl-5 mt-1 space-y-1">
+              <li>Удалить аккаунт и все данные через раздел «Биллинг» в личном кабинете</li>
+              <li>Заморозить аккаунт с сохранением всех данных (раздел «Биллинг»)</li>
+              <li>Запросить удаление данных по email:{' '}
+                <a href="mailto:comedi4@gmail.com" className="text-zinc-900 underline">comedi4@gmail.com</a>
+              </li>
+            </ul>
+            <p className="mt-3"><strong>Клиенты бизнеса</strong> направляют запросы на удаление
+              своих данных непосредственно к владельцу бизнеса (оператору ПД). Владелец бизнеса
+              может удалить данные клиента через раздел «Клиенты» в панели управления.</p>
           </section>
 
           <section>
             <h2 className="text-base font-semibold text-zinc-900 mb-2">7. Безопасность</h2>
             <p>
-              Токены Telegram-ботов хранятся в зашифрованном виде (AES-256).
-              Доступ к данным ограничен политиками Row Level Security (RLS).
+              Токены Telegram-ботов хранятся в зашифрованном виде (AES-256-CBC + уникальная соль).
+              Доступ к данным ограничен политиками Row Level Security (RLS) на уровне базы данных.
               Платёжные данные не хранятся — обрабатываются напрямую YooKassa.
             </p>
           </section>

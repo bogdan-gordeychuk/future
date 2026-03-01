@@ -295,6 +295,12 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       return
     }
 
+    // Frozen account: owner paused the account from billing page
+    if (business.subscription_status === 'frozen') {
+      await ctx.reply('Запись временно приостановлена. Свяжитесь с нами напрямую.')
+      return
+    }
+
     // Step 2: Check trial expiry by date
     const now = new Date()
     const trialExpiredByDate =
@@ -446,6 +452,12 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         .in('status', ['pending', 'confirmed']),
     ])
 
+    // Load master specializations (separate query after masters are known)
+    const masterIds = (masters as Master[] ?? []).map((m) => m.id)
+    const { data: masterServicesRows } = masterIds.length > 0
+      ? await supabase.from('master_services').select('master_id, service_id').in('master_id', masterIds)
+      : { data: [] }
+
     if (svcError) logError(businessId, 'DB error loading services:', svcError)
     if (masterError) logError(businessId, 'DB error loading masters:', masterError)
     if (kbError) logError(businessId, 'DB error loading knowledge_items:', kbError)
@@ -479,6 +491,14 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
       ? generateAvailableSlots(workingHours, bookedSlotsRaw, tz, serviceDuration)
       : []
 
+    // Enrich masters with their serviceIds from master_services
+    const enrichedMasters: Master[] = (masters as Master[] ?? []).map((m) => ({
+      ...m,
+      serviceIds: (masterServicesRows ?? [])
+        .filter((ms: { master_id: string; service_id: string }) => ms.master_id === m.id)
+        .map((ms: { master_id: string; service_id: string }) => ms.service_id),
+    }))
+
     // Client name: prefer preferred_name, then first_name
     const clientName = client.preferred_name || client.first_name || null
 
@@ -491,7 +511,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         {
           business,
           services: (services as Service[]) ?? [],
-          masters: (masters as Master[]) ?? [],
+          masters: enrichedMasters,
           knowledgeItems: (knowledgeItems as KnowledgeItem[]) ?? [],
           bookedSlots,
           clientName,

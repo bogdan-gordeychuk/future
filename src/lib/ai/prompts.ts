@@ -25,7 +25,14 @@ export function buildSystemPrompt(ctx: BusinessContext): string {
     : 'Услуги не указаны'
 
   const mastersText = masters.length
-    ? masters.map((m) => `- ${m.name}`).join('\n')
+    ? masters.map((m) => {
+        const levelStr = m.level ? ` (${m.level})` : ''
+        const serviceNames = m.serviceIds
+          ?.map((sid) => services.find((s) => s.id === sid)?.name)
+          .filter(Boolean)
+        const servicesStr = serviceNames?.length ? ` — ${serviceNames.join(', ')}` : ''
+        return `- ${m.name}${levelStr}${servicesStr}`
+      }).join('\n')
     : 'Мастера не указаны'
 
   const faqText = knowledgeItems.length
@@ -87,7 +94,8 @@ ${faqText ? `ЧАСТЫЕ ВОПРОСЫ:\n${faqText}\n` : ''}
 - Всегда отвечай на русском языке
 - Будь дружелюбным, но лаконичным (1-3 предложения)
 - НЕ используй Markdown (звёздочки **, подчёркивания __, хэши ##) — они не рендерятся в Telegram. Пиши обычным текстом.
-- Если мастеров несколько — ВСЕГДА спрашивай к кому записать ДО предложения времени.
+- ${bizSettings?.require_master_selection !== false && masters.length > 1 ? 'Если мастеров несколько — ВСЕГДА спрашивай к кому записать ДО предложения времени (если только клиент уже не назвал мастера).' : 'Не спрашивай клиента о выборе мастера — выбирай первого доступного на нужное время автоматически.'}
+- Если у мастеров указаны услуги — предлагай ТОЛЬКО мастеров, которые делают запрошенную услугу. Никогда не записывай к мастеру, у которого нет этой услуги в списке.
 - Если clientName передан — обращайся к клиенту по имени.
 - Если clientName = null — при первом уместном моменте спроси "Как к вам обращаться?" и вызови save_client_name.
 - Не придумывай информацию которой нет — скажи что уточнишь у администратора

@@ -123,6 +123,17 @@ export async function processMessage(
     } else if (bookingResult.reason === 'slot_taken') {
       const slots = businessCtx.availableSlots ?? []
       reply = `К сожалению, это время только что заняли. Вот свободные окна:\n${slots.slice(0, 4).join('\n')}`
+    } else if (bookingResult.reason === 'master_wrong_specialization') {
+      const service = businessCtx.services.find(
+        (s) => s.name.toLowerCase().includes(input.service_name.toLowerCase())
+      )
+      const suitable = businessCtx.masters.filter(
+        (m) => m.is_active && (!m.serviceIds?.length || (service && m.serviceIds.includes(service.id)))
+      )
+      const names = suitable.map((m) => m.name).join(', ')
+      reply = names
+        ? `${input.master_name} не выполняет «${input.service_name}». Эту услугу делает: ${names}. К кому записать?`
+        : `${input.master_name} не выполняет «${input.service_name}». Уточните, пожалуйста, у администратора.`
     } else {
       reply = `Хотел бы записать вас на «${input.service_name}», но возникла техническая ошибка. Пожалуйста, напишите нам напрямую или попробуйте позже.`
     }
@@ -176,6 +187,13 @@ async function createPendingBooking(
           (m) => m.name.toLowerCase().includes(input.master_name!.toLowerCase())
         )
       : ctx.masters.length === 1 ? ctx.masters[0] : null
+
+    // Validate specialization: if master has services defined, check they can do this service
+    if (master && master.serviceIds && master.serviceIds.length > 0 && service) {
+      if (!master.serviceIds.includes(service.id)) {
+        return { success: false, reason: 'master_wrong_specialization' }
+      }
+    }
 
     // Parse datetime
     let scheduledAt: string

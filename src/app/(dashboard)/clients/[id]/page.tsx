@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, getBusiness } from '@/lib/supabase/queries'
 import type { Client, Message, Booking } from '@/types/database'
+import { AnonymizeClientButton } from './_anonymize'
 
 type BookingWithService = Booking & {
   services: { name: string } | null
@@ -113,7 +114,10 @@ export default async function ClientDetailPage({
 
       {/* Profile card */}
       <div className="rounded-xl bg-white p-6 shadow-sm mb-6">
-        <h1 className="text-xl font-semibold text-zinc-900 mb-4">{clientName}</h1>
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <h1 className="text-xl font-semibold text-zinc-900">{clientName}</h1>
+          <AnonymizeClientButton clientId={clientData.id} />
+        </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {clientData.telegram_username && (
             <div>

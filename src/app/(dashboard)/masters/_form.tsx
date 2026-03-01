@@ -4,12 +4,38 @@ import { useActionState, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { createMaster, updateMaster, toggleMaster, deleteMaster } from '@/lib/actions/masters'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
-import type { Master } from '@/types/database'
+import type { Master, Service } from '@/types/database'
 
 const INPUT = 'w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 placeholder:text-zinc-400'
 const INIT = { error: null, success: false }
 
-export function AddMasterForm({ businessId }: { businessId: string }) {
+function ServiceCheckboxes({ services, selected }: { services: Service[]; selected?: string[] }) {
+  if (services.length === 0) return null
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-zinc-700">
+        Услуги мастера{' '}
+        <span className="text-zinc-400 font-normal">(оставьте пустым — делает все услуги)</span>
+      </label>
+      <div className="flex flex-wrap gap-2 mt-1">
+        {services.map((s) => (
+          <label key={s.id} className="flex items-center gap-1.5 text-xs text-zinc-700 cursor-pointer">
+            <input
+              type="checkbox"
+              name="service_ids"
+              value={s.id}
+              defaultChecked={selected?.includes(s.id)}
+              className="rounded border-zinc-300"
+            />
+            {s.name}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function AddMasterForm({ businessId, services }: { businessId: string; services: Service[] }) {
   const [state, action, pending] = useActionState(createMaster, INIT)
   const [open, setOpen] = useState(false)
 
@@ -33,8 +59,18 @@ export function AddMasterForm({ businessId }: { businessId: string }) {
             <input type="hidden" name="business_id" value={businessId} />
             <div>
               <label className="mb-1 block text-xs font-medium text-zinc-700">Имя *</label>
-              <input type="text" name="name" required placeholder="Имя специалиста" className={INPUT} />
+              <input type="text" name="name" required placeholder="Например: Алёна" className={INPUT} />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-700">Должность</label>
+              <input
+                type="text"
+                name="level"
+                placeholder="Например: Старший барбер, Бровист, Мастер по ногтям"
+                className={INPUT}
+              />
+            </div>
+            <ServiceCheckboxes services={services} />
             <div className="flex gap-2">
               <button type="submit" disabled={pending}
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
@@ -52,7 +88,15 @@ export function AddMasterForm({ businessId }: { businessId: string }) {
   )
 }
 
-export function MasterRow({ master, businessId }: { master: Master; businessId: string }) {
+export function MasterRow({
+  master,
+  businessId,
+  services,
+}: {
+  master: Master
+  businessId: string
+  services: Service[]
+}) {
   const [editing, setEditing] = useState(false)
   const [state, action, pending] = useActionState(updateMaster, INIT)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -72,6 +116,10 @@ export function MasterRow({ master, businessId }: { master: Master; businessId: 
     toast.success(master.is_active ? 'Специалист скрыт' : 'Специалист активирован')
   }
 
+  const masterServiceNames = services
+    .filter((s) => master.serviceIds?.includes(s.id))
+    .map((s) => s.name)
+
   if (editing) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -84,6 +132,17 @@ export function MasterRow({ master, businessId }: { master: Master; businessId: 
             <input type="text" name="name" defaultValue={master.name} required
               placeholder="Имя специалиста" className={INPUT} />
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700">Должность</label>
+            <input
+              type="text"
+              name="level"
+              defaultValue={master.level ?? ''}
+              placeholder="Например: Старший барбер, Бровист"
+              className={INPUT}
+            />
+          </div>
+          <ServiceCheckboxes services={services} selected={master.serviceIds} />
           {state.error && <p className="text-sm text-red-600">{state.error}</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={pending}
@@ -105,7 +164,13 @@ export function MasterRow({ master, businessId }: { master: Master; businessId: 
       <div className={`rounded-xl bg-white p-5 shadow-sm flex items-center justify-between gap-4 ${!master.is_active ? 'opacity-50' : ''}`}>
         <div>
           <p className="text-sm font-medium text-zinc-900">{master.name}</p>
-          <p className="text-xs text-zinc-400 mt-0.5">{master.is_active ? 'Активен' : 'Скрыт'}</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            {master.level && <span className="mr-2 font-medium">{master.level}</span>}
+            {masterServiceNames.length > 0
+              ? masterServiceNames.join(', ')
+              : <span className="italic text-zinc-400">Все услуги</span>}
+          </p>
+          <p className="text-xs text-zinc-300 mt-0.5">{master.is_active ? 'Активен' : 'Скрыт'}</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <button onClick={() => setEditing(true)}
