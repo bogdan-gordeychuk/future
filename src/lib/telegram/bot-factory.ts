@@ -221,7 +221,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     log(businessId, `msg from tgUser=${telegramUserId}: "${ctx.message.text.slice(0, 60)}"`)
 
     // Rate limit
-    if (!checkRateLimit(telegramUserId)) {
+    if (!await checkRateLimit(telegramUserId)) {
       log(businessId, `rate limit hit for tgUser=${telegramUserId}`)
       await ctx.reply('Подождите немного — слишком много сообщений.')
       return
@@ -261,6 +261,13 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         logError(businessId, 'Admin handler error:', err)
         await ctx.reply('Произошла ошибка. Попробуйте позже.')
       }
+      return
+    }
+
+    // Auto-reply toggle: owner can pause the bot without removing the token
+    const autoReply = (business.settings as BusinessSettings | null)?.auto_reply_enabled ?? true
+    if (!autoReply) {
+      await ctx.reply('Запись временно приостановлена. Свяжитесь с нами напрямую.')
       return
     }
 
@@ -534,6 +541,25 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
           .rpc('increment_messages_used', { sub_id: subscription.id })
         if (subUpdateError) {
           logError(businessId, 'DB error updating messages_used:', subUpdateError)
+        }
+
+        // 80% limit warning — fires exactly once (atomic increment = exact hit)
+        if (
+          subscription.messages_limit !== -1 &&
+          subscription.messages_used + 1 === Math.ceil(subscription.messages_limit * 0.8) &&
+          notifChatId &&
+          business.telegram_bot_token
+        ) {
+          const newUsed = subscription.messages_used + 1
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+          fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: notifChatId,
+              text: `⚠️ Использовано 80% лимита: ${newUsed}/${subscription.messages_limit} сообщений.\nСкоро бот перестанет отвечать клиентам.\nОбновите подписку: ${appUrl}/billing`,
+            }),
+          }).catch(() => {})
         }
       }
     } catch (err) {

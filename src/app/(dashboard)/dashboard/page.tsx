@@ -32,6 +32,7 @@ export default async function DashboardPage() {
     { count: totalClients },
     { count: messagesMonth },
     { count: servicesCount },
+    { data: upcomingBookings },
   ] = await Promise.all([
     supabase
       .from('bookings')
@@ -54,6 +55,14 @@ export default async function DashboardPage() {
       .select('*', { count: 'exact', head: true })
       .eq('business_id', business.id)
       .eq('is_active', true),
+    supabase
+      .from('bookings')
+      .select('id, scheduled_at, status, services(name), masters(name), clients(first_name, preferred_name, telegram_username)')
+      .eq('business_id', business.id)
+      .in('status', ['confirmed', 'pending'])
+      .gte('scheduled_at', new Date().toISOString())
+      .order('scheduled_at', { ascending: true })
+      .limit(5),
   ])
 
   const bizSettings = business.settings as { notification_telegram_id?: string | null } | null
@@ -77,6 +86,36 @@ export default async function DashboardPage() {
         <StatCard label="Клиентов всего" value={totalClients ?? 0} />
         <StatCard label="Сообщений за месяц" value={messagesMonth ?? 0} />
       </div>
+
+      {upcomingBookings && upcomingBookings.length > 0 && (
+        <div className="rounded-xl bg-white p-6 shadow-sm mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-medium text-zinc-900">Ближайшие записи</p>
+            <Link href="/bookings" className="text-xs text-zinc-400 hover:text-zinc-700">Все записи →</Link>
+          </div>
+          <div className="space-y-2">
+            {upcomingBookings.map((b) => {
+              const svc = Array.isArray(b.services) ? b.services[0] : b.services
+              const master = Array.isArray(b.masters) ? b.masters[0] : b.masters
+              const client = Array.isArray(b.clients) ? b.clients[0] : b.clients
+              const clientName = (client as { preferred_name?: string | null; first_name?: string | null; telegram_username?: string | null } | null)?.preferred_name
+                || (client as { preferred_name?: string | null; first_name?: string | null; telegram_username?: string | null } | null)?.first_name
+                || ((client as { preferred_name?: string | null; first_name?: string | null; telegram_username?: string | null } | null)?.telegram_username ? `@${(client as { telegram_username: string }).telegram_username}` : 'Клиент')
+              const dt = new Date(b.scheduled_at).toLocaleString('ru-RU', {
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+              })
+              return (
+                <div key={b.id} className="flex items-center gap-2 text-sm text-zinc-600 py-1 border-b border-zinc-50 last:border-0">
+                  <span className="text-zinc-400 w-28 shrink-0">{dt}</span>
+                  <span className="flex-1 truncate">{(svc as { name?: string } | null)?.name ?? '—'}</span>
+                  <span className="text-zinc-400 truncate hidden sm:block">{(master as { name?: string } | null)?.name ?? '—'}</span>
+                  <span className="text-zinc-500 truncate">{clientName}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {!setupDone && (
         <div className="rounded-xl bg-white p-6 shadow-sm">

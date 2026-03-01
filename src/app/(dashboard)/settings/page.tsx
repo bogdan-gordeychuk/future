@@ -40,6 +40,7 @@ export default async function SettingsPage() {
         timezone={settings?.timezone ?? ''}
         notificationTelegramId={settings?.notification_telegram_id ?? ''}
         notificationChatId={settings?.notification_chat_id ?? ''}
+        autoReplyEnabled={settings?.auto_reply_enabled ?? true}
         workingHours={workingHours}
         hasToken={!!business.telegram_bot_token}
         maskedToken={business.telegram_bot_token ? maskToken(business.telegram_bot_token) : null}

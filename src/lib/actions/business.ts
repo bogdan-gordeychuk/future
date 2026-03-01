@@ -23,6 +23,7 @@ export async function updateBusiness(
   const notifId = (formData.get('notification_telegram_id') as string)?.trim() || null
   const notifChatId = (formData.get('notification_chat_id') as string)?.trim() || null
   const timezone = (formData.get('timezone') as string)?.trim() || null
+  const autoReplyEnabled = formData.get('auto_reply_enabled') === '1'
 
   // Parse working_hours from FormData
   const workingHoursEntries = WORKING_HOURS_DAYS.map(day => {
@@ -45,6 +46,7 @@ export async function updateBusiness(
     notification_chat_id: notifChatId,
     ...(timezone ? { timezone } : {}),
     working_hours,
+    auto_reply_enabled: autoReplyEnabled,
   }
 
   const { error } = await supabase

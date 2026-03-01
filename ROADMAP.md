@@ -50,6 +50,11 @@
 | **Admin bot mode** | ✅ | Владелец пишет боту → Claude Haiku: list_bookings, set_master_time_off, cancel_booking |
 | **Публичная страница /b/[slug]** | ✅ | ISR, услуги, мастера, QR-код, CTA в Telegram |
 | **businesses.slug** | ✅ | Auto-generated (12 hex chars UUID), migration 006 |
+| **80% лимит предупреждение** | ✅ | Fire-and-forget в notifChatId, срабатывает 1 раз |
+| **auto_reply_enabled пауза** | ✅ | Чекбокс в Settings, бот отвечает "приостановлено" |
+| **Ближайшие записи на дашборде** | ✅ | 5 записей под stat-cards, ссылка на /bookings |
+| **Мониторинг платформы /api/cron/monitor** | ✅ | Ежедневный Telegram-дайджест Богдану (07:00 UTC) |
+| **Redis rate limiter (Upstash)** | ✅ | Async, in-memory fallback, env vars добавлены |
 
 ---
 
@@ -57,9 +62,11 @@
 
 ```
 Сообщение от клиента
-  → rate limit (10/min) → "Подождите"
+  → rate limit (10/min, Redis или in-memory) → "Подождите"
   → fetch business
   → ЕСЛИ sender == notification_telegram_id → admin pipeline (Claude Haiku, 3 tools) → return
+  → auto_reply_enabled == false → "Запись приостановлена..."
+  → content guard (injection/jailbreak/exfiltration) → owner alert
   → trial истёк по дате → "Пробный период закончился..."
   → sub expired/cancelled → "Доступ приостановлен..."
   → trial/paid лимит сообщений исчерпан → соответствующий текст
@@ -67,6 +74,7 @@
   → load context (services, masters, kb, history, booked slots)
   → Claude Haiku → tool_use create_booking или text reply
   → notify owner → save assistant message → increment messages_used
+  → ЕСЛИ messages_used+1 == ceil(limit*0.8) → owner 80% warning (fire-and-forget)
 ```
 
 ---
@@ -124,7 +132,7 @@
 
 ### P1 — После первых клиентов
 - [ ] **Мини-виджет подписки на дашборде** — показывать X/Y сообщений без перехода в /billing
-- [ ] **Последние 5 записей на дашборде** — владелец видит что происходит прямо сейчас
+- [x] **Последние 5 записей на дашборде** ✅ Sprint 10
 - [ ] **Скриншот/GIF диалога на лендинге** — после первых клиентов, конверсия вырастет
 - [ ] **Экспорт записей** — CSV для бухгалтерии
 - [ ] **Skeleton screens** в loading.tsx для ключевых страниц
@@ -138,7 +146,7 @@
 
 ### P3 — Масштабирование (при росте)
 - [ ] Supabase Pro → PITR бэкапы (при 5+ платящих)
-- [ ] Redis (Upstash) distributed rate limiting (при 20+ клиентах)
+- [x] Redis (Upstash) distributed rate limiting ✅ Sprint 10 (код готов, требует env vars)
 - [ ] AI queue BullMQ (при 50+ клиентах)
 - [ ] Уведомление РКН (перед PR-кампанией)
 
@@ -154,7 +162,7 @@
 - Клиентские данные: TG ID, имя — персональные данные по 152-ФЗ, /privacy ✅
 
 ### Ограничения (MVP)
-- Rate limiter: in-memory, не шарится между Vercel instances → Redis при 20+ клиентах
+- Rate limiter: Upstash Redis (код готов) + in-memory fallback если env vars не заданы
 - Supabase Free: 1 день retention бэкапов → Pro при 5+ платящих
 
 ### Бэкапы
@@ -185,6 +193,18 @@
 - [ ] Уведомление Роскомнадзора (перед PR-кампанией)
 
 ---
+
+## Последние изменения (2026-03-01, Sprint 10)
+
+| Изменение | Файл(ы) | Тип |
+|-----------|---------|-----|
+| 80% лимит: предупреждение владельцу ровно 1 раз | `bot-factory.ts` | UX / мониторинг |
+| auto_reply_enabled: чекбокс паузы бота в Settings | `bot-factory.ts`, `actions/business.ts`, `settings/_form.tsx`, `settings/page.tsx` | UX |
+| Ближайшие 5 записей на дашборде | `dashboard/page.tsx` | UX |
+| Мониторинг платформы: /api/cron/monitor + migration 007 | `api/cron/monitor/route.ts`, `007_platform_cron.sql` | Ops |
+| Redis rate limiter (Upstash + in-memory fallback) | `rate-limiter.ts` | Надёжность |
+| Зависимость @upstash/redis добавлена | `package.json` | Зависимости |
+| PLATFORM_BOT_TOKEN, PLATFORM_CHAT_ID, UPSTASH_* в .env.example | `.env.example` | Конфигурация |
 
 ## Последние изменения (2026-03-01, Sprint 9)
 
