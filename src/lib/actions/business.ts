@@ -21,6 +21,7 @@ export async function updateBusiness(
   if (!name) return { error: 'Название обязательно', success: false }
 
   const notifId = (formData.get('notification_telegram_id') as string)?.trim() || null
+  const notifChatId = (formData.get('notification_chat_id') as string)?.trim() || null
   const timezone = (formData.get('timezone') as string)?.trim() || null
 
   // Parse working_hours from FormData
@@ -41,6 +42,7 @@ export async function updateBusiness(
   const mergedSettings = {
     ...(biz?.settings as object ?? {}),
     notification_telegram_id: notifId,
+    notification_chat_id: notifChatId,
     ...(timezone ? { timezone } : {}),
     working_hours,
   }

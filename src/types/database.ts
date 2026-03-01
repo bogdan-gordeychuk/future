@@ -16,7 +16,8 @@ export interface BusinessSettings {
   auto_reply_enabled: boolean
   welcome_message: string
   escalation_keywords: string[]
-  notification_telegram_id?: string | null
+  notification_telegram_id?: string | null  // admin identity (who can send admin commands)
+  notification_chat_id?: string | null       // where passive notifications are sent (can differ)
   timezone?: string
   working_hours: {
     mon: WorkingHoursDay
