@@ -1,7 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useTransition, useState } from 'react'
+import { useTransition, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { updateBookingStatus, rescheduleBooking } from '@/lib/actions/bookings'
 
@@ -38,28 +37,46 @@ type Booking = {
 }
 
 export function BookingsClient({
-  bookings,
+  bookings: allBookings,
   businessId,
   timezone,
-  currentFilter,
+  initialFilter,
 }: {
   bookings: Booking[]
   businessId: string
   timezone: string
-  currentFilter: string
+  initialFilter: string
 }) {
-  const router = useRouter()
+  const [activeFilter, setActiveFilter] = useState(initialFilter)
+
+  const now = useMemo(() => new Date(), [])
+
+  const bookings = useMemo(() => {
+    if (activeFilter === 'upcoming') {
+      return allBookings
+        .filter((b) => new Date(b.scheduled_at) >= now && !['cancelled', 'completed', 'no_show'].includes(b.status))
+        .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+    }
+    if (activeFilter === 'pending') {
+      return allBookings.filter((b) => b.status === 'pending')
+        .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+    }
+    // past
+    return allBookings
+      .filter((b) => new Date(b.scheduled_at) < now)
+      .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
+  }, [allBookings, activeFilter, now])
 
   return (
     <div>
-      {/* Filter tabs */}
+      {/* Filter tabs — client-side, no round-trip */}
       <div className="flex gap-1 mb-6 bg-zinc-100 rounded-lg p-1 w-fit">
         {FILTERS.map((f) => (
           <button
             key={f.key}
-            onClick={() => router.push(`/bookings?filter=${f.key}`)}
+            onClick={() => setActiveFilter(f.key)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              currentFilter === f.key
+              activeFilter === f.key
                 ? 'bg-white text-zinc-900 shadow-sm'
                 : 'text-zinc-500 hover:text-zinc-700'
             }`}
@@ -72,7 +89,7 @@ export function BookingsClient({
       {bookings.length === 0 ? (
         <div className="rounded-xl bg-white p-12 shadow-sm text-center">
           <p className="text-zinc-400 text-sm">Записей нет.</p>
-          {currentFilter === 'upcoming' && (
+          {activeFilter === 'upcoming' && (
             <p className="text-zinc-400 text-xs mt-1">
               Подключите бота — клиенты начнут записываться через Telegram.
             </p>

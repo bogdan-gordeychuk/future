@@ -19,24 +19,16 @@ export default async function BookingsPage({
   const tz = (business.settings as BusinessSettings | null)?.timezone || 'Europe/Moscow'
 
   const supabase = await createClient()
-  const now = new Date().toISOString()
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()
 
-  let query = supabase
+  // Load all recent + upcoming bookings in ONE query — client-side filtering avoids extra round-trips per tab
+  const { data: bookings } = await supabase
     .from('bookings')
     .select(`*, clients (first_name, last_name, telegram_username), services (name), masters (name)`)
     .eq('business_id', business.id)
-    .order('scheduled_at', { ascending: filter === 'upcoming' })
-    .limit(100)
-
-  if (filter === 'upcoming') {
-    query = query.gte('scheduled_at', now).not('status', 'in', '("cancelled","completed","no_show")')
-  } else if (filter === 'pending') {
-    query = query.eq('status', 'pending')
-  } else {
-    query = query.lt('scheduled_at', now)
-  }
-
-  const { data: bookings } = await query
+    .gte('scheduled_at', thirtyDaysAgo)
+    .order('scheduled_at', { ascending: false })
+    .limit(200)
 
   return (
     <div>
@@ -46,7 +38,7 @@ export default async function BookingsPage({
         bookings={bookings ?? []}
         businessId={business.id}
         timezone={tz}
-        currentFilter={filter}
+        initialFilter={filter}
       />
     </div>
   )
