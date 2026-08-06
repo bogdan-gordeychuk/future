@@ -8,7 +8,7 @@ export default function LandingPage() {
       {/* Header */}
       <header className="border-b border-zinc-100 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="font-bold text-zinc-900 tracking-tight">ВИКА</span>
+          <span className="font-bold text-zinc-900 tracking-tight">Галя</span>
           <div className="flex items-center gap-3">
             <Link href="/login" className="text-sm text-zinc-600 hover:text-zinc-900">
               Войти
@@ -31,8 +31,8 @@ export default function LandingPage() {
             Перестаньте отвечать на «когда можно записаться?» в 23:00
           </h1>
           <p className="text-lg text-zinc-500 mb-4 max-w-xl mx-auto">
-            ВИКА отвечает клиентам 24/7, записывает и напоминает о визите.
-            Вы занимаетесь работой — не перепиской.
+            Галя — виртуальный администратор. Отвечает клиентам круглосуточно,
+            записывает и напоминает о визите. Вы занимаетесь работой, а не перепиской.
           </p>
           <p className="text-sm text-zinc-400 mb-10">
             Клиент пишет «хочу записаться» → бот уточняет услугу и время → заявка приходит вам в Telegram
@@ -78,11 +78,11 @@ export default function LandingPage() {
           <p className="text-sm text-zinc-400 text-center mb-14">Настройка занимает 15 минут</p>
           <div className="grid sm:grid-cols-4 gap-8">
             <Step step="1" title="Создаёте бота"
-              desc="Регистрируете бота через @BotFather и вставляете токен в ВИКУ." />
+              desc="Регистрируете бота через @BotFather и вставляете токен в Галю." />
             <Step step="2" title="Настраиваете услуги"
               desc="Добавляете прайс, мастеров и ответы на частые вопросы." />
             <Step step="3" title="Клиент пишет в бот"
-              desc="ВИКА отвечает, уточняет детали и создаёт заявку на запись." />
+              desc="Галя отвечает, уточняет детали и создаёт заявку на запись." />
             <Step step="4" title="Запись создана"
               desc="Клиент получает подтверждение сразу. Детали заявки приходят вам в Telegram." />
           </div>
@@ -92,7 +92,7 @@ export default function LandingPage() {
       {/* Features grid */}
       <section className="border-t border-zinc-100 bg-zinc-50 py-20 px-6">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl font-semibold text-zinc-900 text-center mb-14">Что умеет ВИКА</h2>
+          <h2 className="text-2xl font-semibold text-zinc-900 text-center mb-14">Что умеет Галя</h2>
           <div className="grid sm:grid-cols-3 gap-6">
             <FeatureCard
               icon="💬"
@@ -122,7 +122,7 @@ export default function LandingPage() {
             <FeatureCard
               icon="🔔"
               title="Уведомления владельцу"
-              desc="Новая заявка — вы получаете Telegram-сообщение. Еженедельный дайджест с итогами."
+              desc="Новая заявка — Telegram-сообщение вам. Клиент отменил — «Галя, у нас отмена» и освободившееся окно. Плюс еженедельный дайджест с итогами."
             />
             <FeatureCard
               icon="🔗"
@@ -146,14 +146,14 @@ export default function LandingPage() {
       {/* vs competitors */}
       <section className="py-20 px-6">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-semibold text-zinc-900 text-center mb-3">Зачем ВИКА, если есть другие сервисы?</h2>
-          <p className="text-sm text-zinc-400 text-center mb-12">Конкуренты делают виджет записи. ВИКА — живой разговор.</p>
+          <h2 className="text-2xl font-semibold text-zinc-900 text-center mb-3">Зачем Галя, если есть другие сервисы?</h2>
+          <p className="text-sm text-zinc-400 text-center mb-12">Конкуренты делают виджет записи. Галя — живой разговор.</p>
           <div className="rounded-2xl border border-zinc-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-zinc-50 border-b border-zinc-200">
                   <th className="text-left px-5 py-3 font-medium text-zinc-500">Функция</th>
-                  <th className="px-5 py-3 font-semibold text-zinc-900 text-center">ВИКА</th>
+                  <th className="px-5 py-3 font-semibold text-zinc-900 text-center">Галя</th>
                   <th className="px-5 py-3 font-medium text-zinc-400 text-center">YCLIENTS / DIKIDI</th>
                 </tr>
               </thead>
@@ -325,7 +325,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-zinc-800 bg-zinc-900 py-6 px-6">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-zinc-500">© 2026 ВИКА · Telegram-ассистент для малого бизнеса</p>
+          <p className="text-xs text-zinc-500">© 2026 Галя · Telegram-ассистент для малого бизнеса</p>
           <div className="flex items-center gap-5">
             <Link href="/privacy" className="text-xs text-zinc-500 hover:text-zinc-300">
               Политика конфиденциальности

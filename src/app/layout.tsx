@@ -10,7 +10,7 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "ВИКА — AI-ассистент для записи клиентов",
+  title: "Галя — AI-ассистент для записи клиентов",
   description: "Telegram-бот, который отвечает клиентам и записывает их 24/7",
 };
 

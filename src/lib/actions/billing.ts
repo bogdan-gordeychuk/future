@@ -25,7 +25,7 @@ export async function startSubscription(): Promise<void> {
   try {
     const payment = await createPayment({
       amountKopecks: PLAN_PRICE_KOPECKS,
-      description: `Подписка ВИКА на 30 дней — ${business.name}`,
+      description: `Подписка «Галя» на 30 дней — ${business.name}`,
       returnUrl: `${appUrl}/billing?payment=success`,
       metadata: { business_id: business.id },
     })

@@ -156,7 +156,7 @@ export default async function BusinessPublicPage({ params }: Props) {
         <p className="text-center text-xs text-zinc-300 pb-4">
           Работает на{' '}
           <a href={appUrl} className="hover:text-zinc-500">
-            ВИКА
+            Галя
           </a>
         </p>
       </div>

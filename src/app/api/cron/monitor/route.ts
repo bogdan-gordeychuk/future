@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
   })
 
   let text =
-    `📊 VIKA Daily — ${dateStr}\n\n` +
+    `📊 Галя — сводка за ${dateStr}\n\n` +
     `🏢 Активных бизнесов: ${totalBiz} (трайал: ${trialBiz}, платных: ${activeBiz})\n` +
     `⏳ Трайалов истекает в 3 дня: ${expiringTrials}\n` +
     `📅 Записей сегодня: ${bookingsToday ?? 0}\n` +

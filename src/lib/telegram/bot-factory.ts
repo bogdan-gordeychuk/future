@@ -219,7 +219,7 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
         welcome += '\n\nНапишите что вас интересует — я отвечу на ваши вопросы и помогу записаться.'
       }
 
-      welcome += '\n\n— Работает на VIKA.ai'
+      welcome += '\n\n— Галя, виртуальный администратор'
       log(businessId, `/start: smart welcome to tgUser=${ctx.from?.id} services=${services?.length ?? 0}`)
       await ctx.reply(welcome)
     } catch (err) {
@@ -857,7 +857,9 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
           minute: '2-digit',
         })
         const svcPart = bookingToCancel.service_name ?? 'услуга не указана'
-        const notifText = `❌ ${clientDisplayName} отменил запись: ${svcPart} — ${dt}`
+        // Мем «Галя, у нас отмена» уместен ровно здесь: это сообщение владельцу
+        // о сорвавшейся записи, то есть та самая ситуация из оригинала.
+        const notifText = `Галя, у нас отмена!\n\n${clientDisplayName} — ${svcPart}, ${dt}\nОкно освободилось.`
 
         fetch(`https://api.telegram.org/bot${plainToken}/sendMessage`, {
           method: 'POST',

@@ -134,11 +134,11 @@ export async function processMessage(
     const result = await rescheduleBookingInEngine(clientId, input.booking_id, slot.iso, businessCtx)
     let reply: string
     if (result.success) {
-      reply = `Перенесли. Новое время: ${slot.label}. Ждём вас!`
+      reply = `Перенесла. Новое время: ${slot.label}. Ждём вас!`
     } else if (result.reason === 'slot_taken') {
       reply = `К сожалению, это время уже заняли. Свободные окна:\n${formatSlots(businessCtx)}`
     } else if (result.reason === 'not_found') {
-      reply = `Не нашёл эту запись. Напишите «мои записи», чтобы увидеть актуальный список.`
+      reply = `Не нашла эту запись. Напишите «мои записи», чтобы увидеть актуальный список.`
     } else {
       reply = `Не удалось перенести запись. Пожалуйста, свяжитесь с нами напрямую.`
     }
@@ -168,7 +168,7 @@ export async function processMessage(
     if (bookingResult.success) {
       // Название услуги и время берём из наших данных, а не из ответа модели:
       // подтверждение не должно расходиться с тем, что реально записано.
-      reply = `Записали. ${bookingResult.serviceName ?? input.service_name} — ${slot.label}. Ждём вас! Чтобы отменить, напишите «отменить запись».`
+      reply = `Записала. ${bookingResult.serviceName ?? input.service_name} — ${slot.label}. Ждём вас! Чтобы отменить, напишите «отменить запись».`
     } else if (bookingResult.reason === 'slot_taken') {
       reply = `К сожалению, это время только что заняли. Свободные окна:\n${formatSlots(businessCtx)}`
     } else if (bookingResult.reason === 'master_wrong_specialization') {
@@ -183,7 +183,7 @@ export async function processMessage(
         ? `${input.master_name} не выполняет «${input.service_name}». Эту услугу делает: ${names}. К кому записать?`
         : `${input.master_name} не выполняет «${input.service_name}». Уточните, пожалуйста, у администратора.`
     } else {
-      reply = `Хотели записать вас на «${input.service_name}», но возникла техническая ошибка. Пожалуйста, напишите нам напрямую или попробуйте позже.`
+      reply = `Хотела записать вас на «${input.service_name}», но возникла техническая ошибка. Пожалуйста, напишите нам напрямую или попробуйте позже.`
     }
 
     return { reply, intent: 'booking', tokensUsed, bookingCreated: bookingResult.success }

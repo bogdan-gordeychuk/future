@@ -25,7 +25,7 @@ export default async function KnowledgePage() {
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">База знаний</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Вопросы и ответы, которые ВИКА использует при общении с клиентами
+            Вопросы и ответы, которые Галя использует при общении с клиентами
           </p>
         </div>
       </div>
@@ -33,7 +33,7 @@ export default async function KnowledgePage() {
       <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 mb-8">
         <p className="text-xs text-amber-800">
           <span className="font-medium">Совет:</span> Добавьте ответы на частые вопросы ваших клиентов.
-          Чем больше здесь информации — тем точнее отвечает ВИКА.
+          Чем больше здесь информации — тем точнее отвечает Галя.
         </p>
       </div>
 
