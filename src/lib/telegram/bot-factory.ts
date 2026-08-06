@@ -165,6 +165,15 @@ export async function getOrCreateBot(plainToken: string, businessId: string): Pr
 }
 
 function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
+  // Свои записи и отмену обслуживают отдельные обработчики в конце функции.
+  // bot.on('message:text') зарегистрирован раньше них и по умолчанию забирает весь
+  // текст себе, поэтому такие сообщения нужно явно пропускать дальше по цепочке.
+  // Шаблоны объявлены здесь и используются и в проверке, и в самих обработчиках,
+  // чтобы маршрутизация не разошлась с ними при правках.
+  const MY_BOOKINGS_PATTERN = /мои записи/i
+  const CANCEL_PATTERN = /отменит[ьь]?\s*(\d+)?/i
+  const ROUTED_TO_OWN_HANDLER = [/^\/mybookings\b/i, MY_BOOKINGS_PATTERN, CANCEL_PATTERN]
+
   bot.command('start', async (ctx) => {
     const supabase = await createServiceClient()
     try {
@@ -219,9 +228,14 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
     }
   })
 
-  bot.on('message:text', async (ctx) => {
+  bot.on('message:text', async (ctx, next) => {
     const telegramUserId = ctx.from?.id
     if (!telegramUserId) return
+
+    // Пропускаем дальше то, что обслуживают собственные обработчики.
+    if (ROUTED_TO_OWN_HANDLER.some((pattern) => pattern.test(ctx.message.text))) {
+      return next()
+    }
 
     log(businessId, `msg from tgUser=${telegramUserId}: "${ctx.message.text.slice(0, 60)}"`)
 
@@ -703,11 +717,11 @@ function setupHandlers(bot: Bot, businessId: string, plainToken: string) {
   }
 
   bot.command('mybookings', handleMyBookings)
-  bot.hears(/мои записи/i, handleMyBookings)
+  bot.hears(MY_BOOKINGS_PATTERN, handleMyBookings)
 
   // ── C2: Cancellation handler ──────────────────────────────────────────────
 
-  bot.hears(/отменит[ьь]?\s*(\d+)?/i, async (ctx) => {
+  bot.hears(CANCEL_PATTERN, async (ctx) => {
     const telegramUserId = ctx.from?.id
     if (!telegramUserId) return
 
