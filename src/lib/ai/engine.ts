@@ -191,11 +191,23 @@ export async function processMessage(
 
   // Regular text response
   const textBlock = response.content.find((b) => b.type === 'text')
-  const reply = textBlock && textBlock.type === 'text' ? textBlock.text : ''
+  let reply = textBlock && textBlock.type === 'text' ? textBlock.text : ''
 
   const intent = detectIntent(userMessage)
+
+  // Сюда попадают только ответы без вызова инструментов, то есть записи не было.
+  // Модель иногда всё равно пишет «записал» — для клиента это ложное подтверждение:
+  // он придёт, а салон о нём не знает. Правила в промпте маленькая модель нарушает,
+  // поэтому подменяем такой ответ на уточнение здесь.
+  if (CLAIMS_BOOKING_DONE.test(reply) && (businessCtx.availableSlots?.length ?? 0) > 0) {
+    reply = askForSlotAgain(businessCtx)
+  }
+
   return { reply, intent, tokensUsed }
 }
+
+/** Утверждения о состоявшейся записи. Инфинитивы («записать», «записаться») не ловим. */
+const CLAIMS_BOOKING_DONE = /(записал[аи]?|записан[аоы]?|забронировал[аи]?|забронирован[аоы]?)\b/i
 
 /** Ищет окно по номеру, который назвала модель. Номера присваивает сервер. */
 function findSlot(ctx: BusinessContext, slotNumber: unknown) {
