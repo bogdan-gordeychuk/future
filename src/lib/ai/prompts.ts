@@ -11,6 +11,16 @@ export interface ClientBookingRef {
   service_name: string | null
 }
 
+/**
+ * Слот с номером и точным временем. Номер присваивает сервер, ISO хранится рядом
+ * с подписью — модель передаёт только номер и не собирает дату сама.
+ */
+export interface AvailableSlot {
+  number: number
+  label: string
+  iso: string
+}
+
 export interface BusinessContext {
   business: Business
   services: Service[]
@@ -18,7 +28,7 @@ export interface BusinessContext {
   knowledgeItems: KnowledgeItem[]
   bookedSlots?: string[] // formatted busy slots for next 7 days
   clientName?: string | null
-  availableSlots?: string[]
+  availableSlots?: AvailableSlot[]
   clientUpcomingBookings?: ClientBookingRef[]
 }
 
@@ -70,7 +80,7 @@ export function buildSystemPrompt(ctx: BusinessContext): string {
   }
 
   const availableSlotsText = availableSlots && availableSlots.length
-    ? `\nДОСТУПНЫЕ ОКНА:\n${availableSlots.join('\n')}\nПри вопросе о времени — показывай нумерованным списком. Когда клиент выбирает — вызывай create_booking.\n`
+    ? `\nДОСТУПНЫЕ ОКНА:\n${availableSlots.map((s) => `${s.number}. ${s.label}`).join('\n')}\nПоказывай этот список ровно с этими номерами: не меняй порядок, не перенумеровывай, не добавляй своих вариантов и не переписывай подписи времени.\nКогда клиент называет номер — вызывай create_booking и передавай ровно этот номер в slot_number. Дату и время сам не собирай, их подставит система.\nЕсли клиент просит время, которого нет в списке — скажи, что оно занято, и предложи выбрать из списка.\n`
     : ''
 
   const clientBookingsText = clientUpcomingBookings && clientUpcomingBookings.length
@@ -79,7 +89,7 @@ export function buildSystemPrompt(ctx: BusinessContext): string {
           weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz,
         })
         return `${i + 1}. [ID:${b.id}] ${dt}${b.service_name ? ` — ${b.service_name}` : ''}`
-      }).join('\n')}\nЕсли клиент хочет перенести запись — уточни новое время и вызови reschedule_booking.\n`
+      }).join('\n')}\nЕсли клиент хочет перенести запись — покажи ДОСТУПНЫЕ ОКНА и вызови reschedule_booking с номером выбранного окна в slot_number.\n`
     : ''
 
   return `Ты — AI-ассистент записи для бизнеса "${business.name}". Отвечаешь клиентам в Telegram.
@@ -90,9 +100,9 @@ export function buildSystemPrompt(ctx: BusinessContext): string {
 2. Помогать клиентам записаться. Уточнять ПО ПОРЯДКУ:
    а) услугу (если не указана)
    б) мастера (если мастеров БОЛЬШЕ ОДНОГО — спроси, покажи нумерованный список)
-   в) время из ДОСТУПНЫХ ОКОН
+   в) номер окна из списка ДОСТУПНЫЕ ОКНА
    Вызывай create_booking ТОЛЬКО когда а+б+в уточнены.
-3. Помогать перенести запись: если клиент хочет перенести — уточни новое время из ДОСТУПНЫХ ОКОН и вызови reschedule_booking.
+3. Помогать перенести запись: показать ДОСТУПНЫЕ ОКНА и вызвать reschedule_booking с номером выбранного окна.
 4. Быть вежливым, кратким и по делу
 
 БИЗНЕС: ${business.name}
@@ -109,6 +119,8 @@ ${workingHoursText}${slotsText}${availableSlotsText}${clientBookingsText}
 ${faqText ? `ЧАСТЫЕ ВОПРОСЫ:\n${faqText}\n` : ''}
 ПРАВИЛА:
 - Всегда отвечай на русском языке
+- Обращайся к клиенту на «вы» — во всех сообщениях без исключения, включая подтверждение записи
+- Названия услуг и имена мастеров пиши ровно так, как они указаны выше. Не переформулируй, не добавляй слов вроде «обычная» и не сокращай
 - Будь дружелюбным, но лаконичным (1-3 предложения)
 - НЕ используй Markdown (звёздочки **, подчёркивания __, хэши ##) — они не рендерятся в Telegram. Пиши обычным текстом.
 - ${bizSettings?.require_master_selection !== false && masters.length > 1 ? 'Если мастеров несколько — ВСЕГДА спрашивай к кому записать ДО предложения времени (если только клиент уже не назвал мастера).' : 'Не спрашивай клиента о выборе мастера — выбирай первого доступного на нужное время автоматически.'}

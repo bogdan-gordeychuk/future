@@ -27,16 +27,16 @@ const CREATE_BOOKING_TOOL = {
         type: 'string',
         description: 'Имя мастера. Обязательно если в бизнесе несколько мастеров.',
       },
-      preferred_datetime: {
-        type: 'string',
-        description: 'Желаемая дата и время в формате ISO 8601 (например: 2026-03-01T14:00:00). Если клиент назвал только время — используй ближайшую подходящую дату.',
+      slot_number: {
+        type: 'integer',
+        description: 'Номер окна из списка ДОСТУПНЫЕ ОКНА ровно так, как его назвал клиент. Дату и время не собирай — система подставит их сама по номеру.',
       },
       notes: {
         type: 'string',
         description: 'Дополнительные пожелания клиента (если есть)',
       },
     },
-    required: ['service_name', 'preferred_datetime'],
+    required: ['service_name', 'slot_number'],
   },
 }
 
@@ -62,12 +62,12 @@ const RESCHEDULE_BOOKING_TOOL = {
         type: 'string',
         description: 'ID записи которую нужно перенести (из раздела ЗАПИСИ КЛИЕНТА)',
       },
-      new_datetime: {
-        type: 'string',
-        description: 'Новые дата и время в формате ISO 8601 (например: 2026-03-10T14:00:00)',
+      slot_number: {
+        type: 'integer',
+        description: 'Номер окна из списка ДОСТУПНЫЕ ОКНА ровно так, как его назвал клиент. Дату и время не собирай — система подставит их сама по номеру.',
       },
     },
-    required: ['booking_id', 'new_datetime'],
+    required: ['booking_id', 'slot_number'],
   },
 }
 
@@ -124,21 +124,23 @@ export async function processMessage(
   }
 
   if (toolUse && toolUse.type === 'tool_use' && toolUse.name === 'reschedule_booking') {
-    const input = toolUse.input as { booking_id: string; new_datetime: string }
-    const tz =
-      (businessCtx.business.settings as { timezone?: string } | null)?.timezone || 'Europe/Moscow'
+    const input = toolUse.input as { booking_id: string; slot_number: number }
+    const slot = findSlot(businessCtx, input.slot_number)
 
-    const result = await rescheduleBookingInEngine(clientId, input.booking_id, input.new_datetime, businessCtx)
+    if (!slot) {
+      return { reply: askForSlotAgain(businessCtx), intent: 'booking', tokensUsed }
+    }
+
+    const result = await rescheduleBookingInEngine(clientId, input.booking_id, slot.iso, businessCtx)
     let reply: string
     if (result.success) {
-      reply = `Перенесено! Новое время: ${formatDateTime(input.new_datetime, tz)}. Ждём вас!`
+      reply = `Перенесли. Новое время: ${slot.label}. Ждём вас!`
     } else if (result.reason === 'slot_taken') {
-      const slots = businessCtx.availableSlots ?? []
-      reply = `К сожалению, это время уже занято. Вот свободные окна:\n${slots.slice(0, 4).join('\n')}`
+      reply = `К сожалению, это время уже заняли. Свободные окна:\n${formatSlots(businessCtx)}`
     } else if (result.reason === 'not_found') {
-      reply = `Не нашёл эту запись. Напишите "мои записи" чтобы увидеть актуальный список.`
+      reply = `Не нашёл эту запись. Напишите «мои записи», чтобы увидеть актуальный список.`
     } else {
-      reply = `Не удалось перенести запись. Пожалуйста, обратитесь к нам напрямую.`
+      reply = `Не удалось перенести запись. Пожалуйста, свяжитесь с нами напрямую.`
     }
     return { reply, intent: 'booking', tokensUsed }
   }
@@ -147,21 +149,28 @@ export async function processMessage(
     const input = toolUse.input as {
       service_name: string
       master_name?: string
-      preferred_datetime: string
+      slot_number: number
       notes?: string
     }
 
-    const tz =
-      (businessCtx.business.settings as { timezone?: string } | null)?.timezone || 'Europe/Moscow'
+    const slot = findSlot(businessCtx, input.slot_number)
 
-    const bookingResult = await createPendingBooking(businessCtx, clientId, input)
+    if (!slot) {
+      return { reply: askForSlotAgain(businessCtx), intent: 'booking', tokensUsed }
+    }
+
+    const bookingResult = await createPendingBooking(businessCtx, clientId, {
+      ...input,
+      scheduledAtIso: slot.iso,
+    })
 
     let reply: string
     if (bookingResult.success) {
-      reply = `Записал! ${input.service_name} — ${formatDateTime(input.preferred_datetime, tz)}. Ждём вас! Чтобы отменить — напишите "отменить запись".`
+      // Название услуги и время берём из наших данных, а не из ответа модели:
+      // подтверждение не должно расходиться с тем, что реально записано.
+      reply = `Записали. ${bookingResult.serviceName ?? input.service_name} — ${slot.label}. Ждём вас! Чтобы отменить, напишите «отменить запись».`
     } else if (bookingResult.reason === 'slot_taken') {
-      const slots = businessCtx.availableSlots ?? []
-      reply = `К сожалению, это время только что заняли. Вот свободные окна:\n${slots.slice(0, 4).join('\n')}`
+      reply = `К сожалению, это время только что заняли. Свободные окна:\n${formatSlots(businessCtx)}`
     } else if (bookingResult.reason === 'master_wrong_specialization') {
       const service = businessCtx.services.find(
         (s) => s.name.toLowerCase().includes(input.service_name.toLowerCase())
@@ -174,7 +183,7 @@ export async function processMessage(
         ? `${input.master_name} не выполняет «${input.service_name}». Эту услугу делает: ${names}. К кому записать?`
         : `${input.master_name} не выполняет «${input.service_name}». Уточните, пожалуйста, у администратора.`
     } else {
-      reply = `Хотел бы записать вас на «${input.service_name}», но возникла техническая ошибка. Пожалуйста, напишите нам напрямую или попробуйте позже.`
+      reply = `Хотели записать вас на «${input.service_name}», но возникла техническая ошибка. Пожалуйста, напишите нам напрямую или попробуйте позже.`
     }
 
     return { reply, intent: 'booking', tokensUsed, bookingCreated: bookingResult.success }
@@ -188,26 +197,30 @@ export async function processMessage(
   return { reply, intent, tokensUsed }
 }
 
-function formatDateTime(iso: string, tz: string): string {
-  try {
-    return new Date(iso).toLocaleString('ru-RU', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: tz,
-    })
-  } catch {
-    return iso
+/** Ищет окно по номеру, который назвала модель. Номера присваивает сервер. */
+function findSlot(ctx: BusinessContext, slotNumber: unknown) {
+  const n = Number(slotNumber)
+  if (!Number.isInteger(n)) return undefined
+  return (ctx.availableSlots ?? []).find((s) => s.number === n)
+}
+
+function formatSlots(ctx: BusinessContext): string {
+  return (ctx.availableSlots ?? []).map((s) => `${s.number}. ${s.label}`).join('\n')
+}
+
+function askForSlotAgain(ctx: BusinessContext): string {
+  const slots = ctx.availableSlots ?? []
+  if (slots.length === 0) {
+    return 'Свободных окон сейчас нет. Пожалуйста, свяжитесь с нами напрямую.'
   }
+  return `Уточните, пожалуйста, номер окна:\n${formatSlots(ctx)}`
 }
 
 async function createPendingBooking(
   ctx: BusinessContext,
   clientId: string,
-  input: { service_name: string; master_name?: string; preferred_datetime: string; notes?: string }
-): Promise<{ success: boolean; reason?: string }> {
+  input: { service_name: string; master_name?: string; scheduledAtIso: string; notes?: string }
+): Promise<{ success: boolean; reason?: string; serviceName?: string }> {
   try {
     const supabase = await createServiceClient()
 
@@ -234,20 +247,12 @@ async function createPendingBooking(
       }
     }
 
-    // Parse datetime
-    let scheduledAt: string
-    try {
-      scheduledAt = new Date(input.preferred_datetime).toISOString()
-    } catch {
-      return { success: false }
-    }
-
     const { error } = await supabase.from('bookings').insert({
       business_id: ctx.business.id,
       client_id: clientId,
       service_id: service?.id ?? null,
       master_id: master?.id ?? null,
-      scheduled_at: scheduledAt,
+      scheduled_at: input.scheduledAtIso,
       duration_minutes: service?.duration_minutes ?? 60,
       price_kopecks: service?.price_kopecks ?? 0,
       status: 'confirmed',
@@ -261,7 +266,7 @@ async function createPendingBooking(
       return { success: false }
     }
 
-    return { success: true }
+    return { success: true, serviceName: service?.name }
   } catch {
     return { success: false }
   }

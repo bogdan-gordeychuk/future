@@ -1,6 +1,7 @@
 import { Bot, type Context } from 'grammy'
 import { createServiceClient } from '@/lib/supabase/server'
 import { processMessage } from '@/lib/ai/engine'
+import type { AvailableSlot } from '@/lib/ai/prompts'
 import { checkRateLimit } from './rate-limiter'
 import { decryptToken } from '@/lib/crypto'
 import { handleAdminMessage } from './admin-handler'
@@ -67,11 +68,11 @@ function generateAvailableSlots(
   bookedSlotsRaw: Array<{ scheduled_at: string }>,
   tz: string,
   serviceDurationMin?: number
-): string[] {
+): AvailableSlot[] {
   const duration = serviceDurationMin ?? 60
   const bookedTimes = bookedSlotsRaw.map((b) => new Date(b.scheduled_at).getTime())
 
-  const result: string[] = []
+  const result: Array<Omit<AvailableSlot, 'number'>> = []
   let workingDaysFound = 0
 
   const today = new Date()
@@ -100,7 +101,7 @@ function generateAvailableSlots(
     // Build date string in business timezone for slot generation
     const dateStr = date.toLocaleDateString('en-CA', { timeZone: tz }) // YYYY-MM-DD
 
-    const daySlots: string[] = []
+    const daySlots: Array<Omit<AvailableSlot, 'number'>> = []
 
     let slotHour = startHour
     let slotMin = startMin
@@ -127,7 +128,9 @@ function generateAvailableSlots(
           minute: '2-digit',
           timeZone: tz,
         })
-        daySlots.push(slotFormatted)
+        // ISO хранится рядом с подписью: по нему запись и создаётся,
+        // модель дату не собирает.
+        daySlots.push({ label: slotFormatted, iso: new Date(slotMs).toISOString() })
       }
 
       // Advance by duration
@@ -146,7 +149,8 @@ function generateAvailableSlots(
     }
   }
 
-  return result
+  // Номера присваиваются здесь и попадают в промпт как есть — модель их не выдумывает.
+  return result.map((slot, index) => ({ number: index + 1, ...slot }))
 }
 
 export async function getOrCreateBot(plainToken: string, businessId: string): Promise<Bot> {
